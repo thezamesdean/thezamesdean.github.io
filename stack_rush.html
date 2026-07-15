@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>STACK RUSH</title>
+<style>
+  /* ---------------------------------------------------------------
+     STACK RUSH — a one-tap stacking game.
+     Everything is in this one file so you can drop it on any host.
+     Palette: deep midnight blue -> the tower cycles through warm
+     neon so the stack itself is the brightest thing on screen.
+  ----------------------------------------------------------------*/
+  :root{
+    --bg-top:#0b1026;
+    --bg-bot:#161d3f;
+    --ink:#f4f6ff;
+    --muted:#8a93c2;
+    --accent:#ffd166;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background:linear-gradient(180deg,var(--bg-top),var(--bg-bot));
+    color:var(--ink);
+    font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+    display:flex;align-items:center;justify-content:center;
+    touch-action:manipulation;
+  }
+  #wrap{
+    position:relative;
+    width:100%;height:100%;
+    max-width:480px;   /* phone-shaped even on desktop */
+    margin:0 auto;
+    overflow:hidden;
+  }
+  canvas{display:block;width:100%;height:100%;}
+
+  /* on-screen text overlays */
+  #hud{
+    position:absolute;top:0;left:0;right:0;
+    padding:22px 24px;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    pointer-events:none;
+  }
+  #score{font-size:64px;font-weight:800;line-height:1;letter-spacing:-2px;
+    text-shadow:0 4px 24px rgba(0,0,0,.4);}
+  #best{font-size:13px;color:var(--muted);text-align:right;font-weight:600;
+    letter-spacing:.5px;margin-top:6px;}
+
+  .screen{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:32px;
+    background:rgba(9,12,30,.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+    transition:opacity .25s ease;
+  }
+  .hidden{opacity:0;pointer-events:none;}
+
+  .title{
+    font-size:56px;font-weight:800;letter-spacing:-2px;line-height:.95;
+    background:linear-gradient(120deg,#ffd166,#ff6b9d,#8b7bff);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    margin-bottom:14px;
+  }
+  .sub{color:var(--muted);font-size:15px;font-weight:600;margin-bottom:40px;letter-spacing:.3px;}
+  .cta{
+    font-size:20px;font-weight:700;letter-spacing:.5px;
+    padding:16px 40px;border-radius:999px;border:none;cursor:pointer;
+    background:var(--accent);color:#12172e;
+    box-shadow:0 8px 30px rgba(255,209,102,.35);
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
+
+  .go-score{font-size:88px;font-weight:800;line-height:1;letter-spacing:-3px;margin-bottom:4px;}
+  .go-label{color:var(--muted);font-size:14px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:28px;}
+  .go-best{color:var(--accent);font-size:15px;font-weight:700;margin-bottom:34px;}
+  .row{display:flex;gap:12px;}
+  .btn2{
+    font-size:16px;font-weight:700;padding:14px 26px;border-radius:999px;
+    border:1.5px solid rgba(255,255,255,.25);background:transparent;color:var(--ink);cursor:pointer;
+  }
+  .btn2.primary{background:var(--accent);color:#12172e;border-color:var(--accent);}
+  .toast{
+    position:absolute;bottom:38px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:#fff;color:#12172e;font-weight:700;font-size:14px;
+    padding:11px 20px;border-radius:999px;opacity:0;transition:.3s;white-space:nowrap;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  @media (prefers-reduced-motion:reduce){.cta{animation:none;}}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c"></canvas>
+
+  <div id="hud">
+    <div id="score">0</div>
+    <div id="best">BEST 0</div>
+  </div>
+
+  <!-- Start -->
+  <div class="screen" id="startScreen">
+    <div class="title">STACK<br>RUSH</div>
+    <div class="sub">Tap to drop the block.<br>Line it up. How high can you go?</div>
+    <button class="cta" id="startBtn">TAP TO PLAY</button>
+  </div>
+
+  <!-- Game over -->
+  <div class="screen hidden" id="overScreen">
+    <div class="go-score" id="finalScore">0</div>
+    <div class="go-label">blocks stacked</div>
+    <div class="go-best" id="finalBest">Best 0</div>
+    <div class="row">
+      <button class="btn2 primary" id="retryBtn">Play again</button>
+      <button class="btn2" id="shareBtn">Share score</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Copied! Paste it anywhere.</div>
+</div>
+
+<script>
+/* ============================================================
+   STACK RUSH  —  core game
+   ------------------------------------------------------------
+   Controls: tap / click / spacebar to drop the moving block.
+   Score = number of blocks landed. Overhang gets sliced off,
+   so each slightly-off drop makes the next block narrower.
+   Miss completely -> game over.
+   ============================================================ */
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('wrap');
+
+// --- persistent best score ---------------------------------
+let best = +(localStorage.getItem('stackrush_best') || 0);
+function saveBest(){ 
+  localStorage.setItem('stackrush_best', best);
+}
+
+// --- sizing / retina ---------------------------------------
+let W = 0, H = 0, DPR = 1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = wrap.clientWidth;
+  H = wrap.clientHeight;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- game state --------------------------------------------
+const BLOCK_H = 42;          // pixel height of each block
+let blocks;                  // stacked blocks: {x,w,hue}
+let moving;                  // the block currently sliding
+let dir;                     // slide direction
+let speed;                   // slide speed (pixels per second)
+let score;                   // blocks landed
+let camY;                    // camera vertical offset (scroll up)
+let targetCamY;
+let state;                   // 'start' | 'play' | 'over'
+let shake;                   // screen-shake amount
+let flashes;                 // perfect-drop flashes
+let lastTime = 0;            // for delta time calculation
+
+function baseWidth(){ return Math.min(W * 0.62, 260); }
+
+function reset(){
+  blocks = [];
+  const bw = baseWidth();
+  const startX = (W - bw) / 2;
+  // foundation block
+  blocks.push({ x:startX, w:bw, hue:210 });
+  score = 0;
+  camY = 0; targetCamY = 0;
+  shake = 0; flashes = [];
+  lastTime = 0;
+  spawn();
+}
+
+function spawn(){
+  const top = blocks[blocks.length-1];
+  const hue = (210 + blocks.length * 24) % 360;
+  
+  // Speed is now in pixels per second for delta time rendering
+  speed = Math.min(380 + blocks.length * 20, 950);
+  
+  // start off-screen on alternating sides
+  const fromLeft = blocks.length % 2 === 0;
+  moving = { x: fromLeft ? -top.w : W, w: top.w, hue };
+  dir = fromLeft ? 1 : -1;
+}
+
+// y position (screen space) of the Nth block from bottom
+function blockY(indexFromBottom){
+  return H - 90 - indexFromBottom * BLOCK_H + camY;
+}
+
+function drop(){
+  if(state !== 'play') return;
+  const top = blocks[blocks.length-1];
+  const overlapLeft = Math.max(moving.x, top.x);
+  const overlapRight = Math.min(moving.x + moving.w, top.x + top.w);
+  const overlap = overlapRight - overlapLeft;
+
+  if(overlap <= 0){            // total miss -> game over
+    gameOver();
+    return;
+  }
+
+  const perfect = Math.abs(moving.x - top.x) < 6;
+  const w = perfect ? top.w : overlap;
+  const x = perfect ? top.x : overlapLeft;
+
+  blocks.push({ x, w, hue: moving.hue });
+  score++;
+  document.getElementById('score').textContent = score;
+
+  if(perfect){
+    shake = 6;
+    flashes.push({ x:x+w/2, y:blockY(blocks.length-1), r:8, life:1 });
+    beep(660);
+  } else {
+    beep(330);
+  }
+
+  // scroll the camera so the tower stays roughly centred once tall
+  if(blocks.length > 6) targetCamY += BLOCK_H;
+
+  spawn();
+}
+
+function gameOver(){
+  state = 'over';
+  if(score > best){ 
+    best = score; 
+    saveBest(); 
+  }
+  document.getElementById('finalScore').textContent = score;
+  document.getElementById('finalBest').textContent = 'Best ' + best;
+  document.getElementById('best').textContent = 'BEST ' + best;
+  show('overScreen');
+}
+
+// --- tiny sound (WebAudio, no files) -----------------------
+let actx;
+function beep(freq){
+  try{
+    if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state === 'suspended') actx.resume();
+    
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = freq; o.type = 'triangle';
+    g.gain.value = 0.06;
+    o.connect(g); g.connect(actx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.15);
+    o.stop(actx.currentTime + 0.15);
+  }catch(e){}
+}
+
+// --- render loop -------------------------------------------
+function draw(time){
+  requestAnimationFrame(draw);
+
+  // Delta time ensures consistent speed on 120Hz/144Hz monitors
+  if(!lastTime) lastTime = time;
+  const dt = Math.min((time - lastTime) / 1000, 0.05); // cap at 0.05 to prevent bugs on lag
+  lastTime = time;
+
+  // smooth camera + shake decay
+  camY += (targetCamY - camY) * 0.12;
+  shake *= 0.85;
+  const sx = (Math.random()-0.5) * shake;
+  const sy = (Math.random()-0.5) * shake;
+
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // draw stacked blocks
+  for(let i=0;i<blocks.length;i++){
+    const b = blocks[i];
+    paintBlock(b.x, blockY(i), b.w, b.hue);
+  }
+
+  // move + draw the active block
+  if(state === 'play'){
+    moving.x += dir * speed * dt;
+    const top = blocks[blocks.length-1];
+    if(moving.x + moving.w > W + moving.w*0.15){ dir = -1; }
+    if(moving.x < -moving.w*0.15){ dir = 1; }
+    paintBlock(moving.x, blockY(blocks.length), moving.w, moving.hue, true);
+  }
+
+  // perfect-drop flashes
+  for(let i=flashes.length-1;i>=0;i--){
+    const f = flashes[i];
+    f.r += 3; f.life -= 0.06;
+    if(f.life<=0){ flashes.splice(i,1); continue; }
+    ctx.beginPath();
+    ctx.arc(f.x, f.y+BLOCK_H/2, f.r, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(255,255,255,${f.life})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function paintBlock(x, y, w, hue, active){
+  const grad = ctx.createLinearGradient(x, y, x, y+BLOCK_H);
+  grad.addColorStop(0, `hsl(${hue} 85% 68%)`);
+  grad.addColorStop(1, `hsl(${hue} 80% 54%)`);
+  ctx.fillStyle = grad;
+  roundRect(x, y, w, BLOCK_H-3, 6);
+  ctx.fill();
+  
+  // top edge highlight (skip on very narrow blocks)
+  if(w > 8){
+    ctx.fillStyle = `hsla(${hue} 90% 82% / .6)`;
+    roundRect(x+3, y+2, w-6, 4, 2);
+    ctx.fill();
+  }
+  
+  if(active){
+    ctx.strokeStyle = 'rgba(255,255,255,.35)';
+    ctx.lineWidth = 1;
+    roundRect(x, y, w, BLOCK_H-3, 6); ctx.stroke();
+  }
+}
+
+function roundRect(x,y,w,h,r){
+  w = Math.max(0, w); h = Math.max(0, h);          // never negative
+  r = Math.max(0, Math.min(r, w/2, h/2));          // radius can't go below 0
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+// --- screens -----------------------------------------------
+function show(id){
+  ['startScreen','overScreen'].forEach(s=>{
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+}
+function hideScreens(){
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('overScreen').classList.add('hidden');
+}
+
+function startGame(){
+  reset();
+  state = 'play';
+  document.getElementById('score').textContent = '0';
+  hideScreens();
+  
+  // initialize audio context on user gesture
+  if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if(actx.state === 'suspended') actx.resume();
+}
+
+// --- input --------------------------------------------------
+function tap(e){
+  if(e.target.tagName === 'BUTTON') return;
+  if(state === 'play'){ e.preventDefault(); drop(); }
+}
+canvas.addEventListener('pointerdown', tap);
+window.addEventListener('keydown', e=>{
+  if(e.code === 'Space'){ e.preventDefault(); if(state==='play') drop(); }
+});
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+
+// --- share (the viral hook) --------------------------------
+document.getElementById('shareBtn').addEventListener('click', async ()=>{
+  // TODO when you deploy: put your real game link here 👇
+  const link = 'https://your-game-link.com';
+  const text = `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me? ${link}`;
+  try{
+    if(navigator.share){
+      await navigator.share({ title:'STACK RUSH', text });
+    }else{
+      await navigator.clipboard.writeText(text);
+      toast();
+    }
+  }catch(e){
+    try{ await navigator.clipboard.writeText(text); toast(); }catch(_){}
+  }
+});
+
+function toast(){
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+// --- boot ---------------------------------------------------
+state = 'start';
+reset();
+document.getElementById('score').textContent = '';
+document.getElementById('best').textContent = 'BEST ' + best;
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
