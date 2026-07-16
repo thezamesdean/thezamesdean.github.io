@@ -12,7 +12,6 @@
      og:image MUST be an absolute URL — relative paths are ignored. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="STACK RUSH">
-<meta property="og:url" content="https://zamesdean.github.io/">
 <meta property="og:title" content="STACK RUSH — how high can you go?">
 <meta property="og:description" content="One tap, one tower. Drop the block, line it up, and see how high you can stack before it all goes wrong.">
 <meta property="og:image" content="https://zamesdean.github.io/og.jpg">
@@ -103,6 +102,17 @@
     border:1.5px solid rgba(255,255,255,.25);background:transparent;color:var(--ink);cursor:pointer;
   }
   .btn2.primary{background:var(--accent);color:#12172e;border-color:var(--accent);}
+  /* --- challenge mode: shown when the URL carries ?c=N --- */
+  .gone{display:none !important;}
+  .chal{display:flex;flex-direction:column;align-items:center;gap:3px;margin-bottom:38px;}
+  .chal-label{color:var(--muted);font-size:12px;font-weight:700;
+    letter-spacing:1.6px;text-transform:uppercase;}
+  .chal-num{font-size:92px;font-weight:800;line-height:1;letter-spacing:-4px;
+    color:var(--accent);text-shadow:0 6px 34px rgba(255,209,102,.35);}
+  .go-chal{font-size:15px;font-weight:800;letter-spacing:.3px;
+    margin-bottom:12px;color:var(--muted);}
+  .go-chal.win{color:#7ee79f;}
+
   .toast{
     position:absolute;bottom:38px;left:50%;transform:translateX(-50%) translateY(20px);
     background:#fff;color:#12172e;font-weight:700;font-size:14px;
@@ -124,7 +134,12 @@
   <!-- Start -->
   <div class="screen" id="startScreen">
     <div class="title">STACK<br>RUSH</div>
-    <div class="sub">Tap to drop the block.<br>Line it up. How high can you go?</div>
+    <div class="chal gone" id="chalBanner">
+      <div class="chal-label">Your target</div>
+      <div class="chal-num" id="chalNum">0</div>
+      <div class="chal-label">blocks to beat</div>
+    </div>
+    <div class="sub" id="startSub">Tap to drop the block.<br>Line it up. How high can you go?</div>
     <button class="cta" id="startBtn">TAP TO PLAY</button>
   </div>
 
@@ -132,6 +147,7 @@
   <div class="screen hidden" id="overScreen">
     <div class="go-score" id="finalScore">0</div>
     <div class="go-label">blocks stacked</div>
+    <div class="go-chal gone" id="chalResult"></div>
     <div class="go-best" id="finalBest">Best 0</div>
     <div class="row">
       <button class="btn2 primary" id="retryBtn">Play again</button>
@@ -189,6 +205,18 @@ let shake;                   // screen-shake amount
 let flashes;                 // perfect-drop flashes
 let lastTime = 0;            // for delta time calculation
 
+// --- challenge mode -----------------------------------------
+// A shared link carries the sender's score as ?c=N. The receiver then
+// plays against that number: a target line is drawn at height N and the
+// run is "won" by placing a block above it. No backend, no accounts —
+// the score rides in the URL, and beating it produces a new ?c= link,
+// which is what turns a one-off brag into a rally.
+const challenge = (()=>{
+  const n = parseInt(new URLSearchParams(location.search).get('c'), 10);
+  return (Number.isFinite(n) && n > 0 && n < 10000) ? n : 0;
+})();
+let beaten;                  // did this run clear the challenge?
+
 function baseWidth(){ return Math.min(W * 0.62, 260); }
 
 function reset(){
@@ -200,6 +228,7 @@ function reset(){
   score = 0;
   camY = 0; targetCamY = 0;
   shake = 0; flashes = [];
+  beaten = false;
   lastTime = 0;
   spawn();
 }
@@ -256,6 +285,15 @@ function drop(){
     beep(330);
   }
 
+  // the moment the challenge falls — make it unmistakable
+  if(challenge && !beaten && score > challenge){
+    beaten = true;
+    shake = 18;
+    flashes.push({ x:W/2, y:blockY(blocks.length-1), r:10, life:1 });
+    beep(880);
+    setTimeout(()=>beep(1320), 110);
+  }
+
   // scroll the camera so the tower stays roughly centred once tall
   if(blocks.length > 6) targetCamY += BLOCK_H;
 
@@ -269,6 +307,18 @@ function gameOver(){
     saveBest(); 
   }
   document.getElementById('finalScore').textContent = score;
+
+  const cr = document.getElementById('chalResult');
+  if(challenge){
+    cr.classList.remove('gone');
+    cr.classList.toggle('win', beaten);
+    cr.textContent = beaten
+      ? `You beat ${challenge}!`
+      : `${challenge - score + 1} more to beat ${challenge}`;
+  } else {
+    cr.classList.add('gone');
+  }
+
   document.getElementById('finalBest').textContent = 'Best ' + best;
   document.getElementById('best').textContent = 'BEST ' + best;
   show('overScreen');
@@ -321,6 +371,8 @@ function draw(time){
     }
   }
 
+  drawTarget();
+
   // move + draw the active block
   if(state === 'play'){
     moving.x += dir * speed * dt;
@@ -342,6 +394,39 @@ function draw(time){
     ctx.stroke();
   }
 
+  ctx.restore();
+}
+
+// Dashed line at the challenger's height, plus a marker pill. The line
+// rides on blockY() so it scrolls with the camera for free. When the
+// target is above the viewport the pill sticks to the top edge with an
+// arrow, so you always know how far there is left to climb.
+function drawTarget(){
+  if(!challenge) return;
+  const ly = blockY(challenge);
+  const rgb = beaten ? '126,231,159' : '255,209,102';
+
+  if(ly > 6 && ly < H - 6){
+    ctx.save();
+    ctx.setLineDash([9,8]);
+    ctx.strokeStyle = `rgba(${rgb},.65)`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, ly); ctx.lineTo(W, ly); ctx.stroke();
+    ctx.restore();
+  }
+
+  const above = ly <= 6;
+  const label = beaten ? 'BEAT ' + challenge : (above ? challenge + ' \u2191' : String(challenge));
+  const py = Math.max(28, Math.min(ly - 15, H - 28));
+  ctx.save();
+  ctx.font = '800 13px "Segoe UI", system-ui, sans-serif';
+  const pw = ctx.measureText(label).width + 20, ph = 23;
+  const px = W - pw - 14;
+  ctx.fillStyle = `rgba(${rgb},.95)`;
+  roundRect(px, py - ph/2, pw, ph, 11); ctx.fill();
+  ctx.fillStyle = '#12172e';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, px + pw/2, py);
   ctx.restore();
 }
 
@@ -440,8 +525,16 @@ try {
 //  - Neither available: copy the brag text.
 
 const SHARE_LINK = 'https://zamesdean.github.io';
+
+// Every shared link hands the receiver this score as their target, so
+// beating it produces another link, and so on.
+function challengeUrl(){
+  return score > 0 ? `${SHARE_LINK}/?c=${score}` : SHARE_LINK;
+}
 function brag(){
-  return `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me? ${SHARE_LINK}`;
+  return challenge && beaten
+    ? `I beat ${challenge} with ${score} blocks in STACK RUSH 🧱 Your turn: ${challengeUrl()}`
+    : `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me? ${challengeUrl()}`;
 }
 
 // Tower + score overlay, drawn synchronously onto the game canvas and
@@ -505,17 +598,20 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
       // upload failed — the card still goes out with the static og.jpg
     }
     try {
+      const url = challengeUrl();
       Kakao.Share.sendDefault({
         objectType: 'feed',
         content: {
           title: `SCORE: ${score} - STACK RUSH`,
-          description: `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me?`,
+          description: challenge && beaten
+            ? `I beat ${challenge}. Now beat ${score}. 🧱`
+            : `I stacked ${score} blocks 🧱 Can you beat me?`,
           imageUrl: imageUrl,
           imageWidth: canvas.width,
           imageHeight: canvas.height,
-          link: { mobileWebUrl: SHARE_LINK, webUrl: SHARE_LINK },
+          link: { mobileWebUrl: url, webUrl: url },
         },
-        buttons: [{ title: 'Play STACK RUSH', link: { mobileWebUrl: SHARE_LINK, webUrl: SHARE_LINK } }]
+        buttons: [{ title: `Beat ${score}`, link: { mobileWebUrl: url, webUrl: url } }]
       });
       return;
     } catch(e) {
@@ -538,6 +634,16 @@ state = 'start';
 reset();
 document.getElementById('score').textContent = '';
 document.getElementById('best').textContent = 'BEST ' + best;
+
+// An arriving challenge takes over the start screen: the number someone
+// else hit is the whole pitch, so the generic how-to-play line steps aside.
+if(challenge){
+  document.getElementById('chalNum').textContent = challenge;
+  document.getElementById('chalBanner').classList.remove('gone');
+  document.getElementById('startSub').classList.add('gone');
+  document.getElementById('startBtn').textContent = 'BEAT IT';
+  document.title = `Beat ${challenge} — STACK RUSH`;
+}
 requestAnimationFrame(draw);
 </script>
 </body>
