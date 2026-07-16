@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>STACK RUSH</title>
+<script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"></script>
 <style>
   /* ---------------------------------------------------------------
      STACK RUSH — a one-tap stacking game.
@@ -114,7 +115,10 @@
     <div class="go-best" id="finalBest">Best 0</div>
     <div class="row">
       <button class="btn2 primary" id="retryBtn">Play again</button>
-      <button class="btn2" id="shareBtn">Share score</button>
+    </div>
+    <div class="row" style="margin-top: 10px; gap: 8px;">
+      <button class="btn2" id="shareBtn" style="flex:1;">Share</button>
+      <button class="btn2" id="kakaoBtn" style="flex:1; background-color:#fee500; color:#191919; border:none; border-radius:12px; font-weight:800;">KakaoTalk</button>
     </div>
   </div>
 
@@ -448,6 +452,69 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
     // Fallback for browsers that do not support navigator.share
     navigator.clipboard.writeText(text).then(toast).catch(()=>{});
   }
+});
+
+// --- KakaoTalk Share ---------------------------------------
+Kakao.init('ca7da54d895ecbdd5f6f2d1295df41ec');
+document.getElementById('kakaoBtn').addEventListener('click', async () => {
+  const link = 'https://zamesdean.github.io';
+  
+  // 1. Draw the brag text onto canvas
+  ctx.save();
+  ctx.fillStyle = 'rgba(9,12,30,.8)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#ffd166';
+  ctx.font = '900 58px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`SCORE: ${score}`, W/2, H/2 - 24);
+  ctx.fillStyle = '#f4f6ff';
+  ctx.font = '800 24px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText('STACK RUSH', W/2, H/2 + 24);
+  ctx.fillStyle = '#8a93c2';
+  ctx.font = '600 15px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText('zamesdean.github.io', W/2, H/2 + 64);
+  ctx.restore();
+
+  // 2. Extract Blob
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  const file = new File([blob], 'stackrush.png', { type: 'image/png' });
+
+  // 3. Upload Image to Kakao
+  Kakao.Share.uploadImage({
+    file: [file]
+  }).then(function(response) {
+    let imageUrl = '';
+    if (response.infos && response.infos.original) {
+      imageUrl = response.infos.original.url;
+    } else if (Array.isArray(response.infos)) {
+      imageUrl = response.infos[0].url;
+    }
+    
+    // 4. Send Kakao Default Feed
+    Kakao.Share.sendDefault({
+      objectType: 'feed',
+      content: {
+        title: `SCORE: ${score} - STACK RUSH`,
+        description: `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me?`,
+        imageUrl: imageUrl,
+        link: {
+          mobileWebUrl: link,
+          webUrl: link,
+        },
+      },
+      buttons: [
+        {
+          title: 'Play STACK RUSH',
+          link: {
+            mobileWebUrl: link,
+            webUrl: link,
+          },
+        },
+      ],
+    });
+  }).catch(function(error) {
+    console.error('Kakao Upload Error:', error);
+  });
 });
 
 function toast(){
