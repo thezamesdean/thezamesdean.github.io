@@ -217,7 +217,7 @@ function drop(){
   const w = perfect ? top.w : overlap;
   const x = perfect ? top.x : overlapLeft;
 
-  blocks.push({ x, w, hue: moving.hue });
+  blocks.push({ x, w, hue: moving.hue, perfectFlash: perfect ? 1 : 0 });
   score++;
   document.getElementById('score').textContent = score;
 
@@ -286,7 +286,12 @@ function draw(time){
   // draw stacked blocks
   for(let i=0;i<blocks.length;i++){
     const b = blocks[i];
-    paintBlock(b.x, blockY(i), b.w, b.hue);
+    paintBlock(b.x, blockY(i), b.w, b.hue, false, b.perfectFlash);
+    
+    if (b.perfectFlash > 0) {
+      b.perfectFlash -= dt * 2.5;
+      if (b.perfectFlash < 0) b.perfectFlash = 0;
+    }
   }
 
   // move + draw the active block
@@ -313,7 +318,7 @@ function draw(time){
   ctx.restore();
 }
 
-function paintBlock(x, y, w, hue, active){
+function paintBlock(x, y, w, hue, active, flashAlpha = 0){
   const grad = ctx.createLinearGradient(x, y, x, y+BLOCK_H);
   grad.addColorStop(0, `hsl(${hue} 85% 68%)`);
   grad.addColorStop(1, `hsl(${hue} 80% 54%)`);
@@ -331,6 +336,12 @@ function paintBlock(x, y, w, hue, active){
   if(active){
     ctx.strokeStyle = 'rgba(255,255,255,.35)';
     ctx.lineWidth = 1;
+    roundRect(x, y, w, BLOCK_H-3, 6); ctx.stroke();
+  }
+  
+  if(flashAlpha > 0){
+    ctx.strokeStyle = `rgba(255,255,255,${flashAlpha})`;
+    ctx.lineWidth = 3;
     roundRect(x, y, w, BLOCK_H-3, 6); ctx.stroke();
   }
 }
