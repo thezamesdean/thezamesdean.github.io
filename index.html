@@ -402,8 +402,8 @@ document.getElementById('retryBtn').addEventListener('click', startGame);
 // --- share (the viral hook) --------------------------------
 document.getElementById('shareBtn').addEventListener('click', async ()=>{
   const link = 'https://zamesdean.github.io';
-  const text = `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me?`;
-  const fullText = `${text} ${link}`;
+  // Combine text and link into a single plain text string
+  const text = `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me? ${link}`;
   
   if (navigator.share) {
     try {
@@ -436,16 +436,17 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
       const file = new File([u8arr], 'stackrush.png', { type: 'image/png' });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ title: 'STACK RUSH', text, url: link, files: [file] });
+        // Send as a single text property to prevent 3 separate bubbles
+        await navigator.share({ title: 'STACK RUSH', text: text, files: [file] });
       } else {
-        await navigator.share({ title: 'STACK RUSH', text, url: link });
+        await navigator.share({ title: 'STACK RUSH', text: text });
       }
     } catch(e) {
       // User cancelled share or it failed
     }
   } else {
     // Fallback for browsers that do not support navigator.share
-    navigator.clipboard.writeText(fullText).then(toast).catch(()=>{});
+    navigator.clipboard.writeText(text).then(toast).catch(()=>{});
   }
 });
 
