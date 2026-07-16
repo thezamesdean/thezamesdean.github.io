@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>STACK RUSH</title>
-<script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"></script>
 <style>
   /* ---------------------------------------------------------------
      STACK RUSH — a one-tap stacking game.
@@ -90,26 +89,6 @@
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
   @media (prefers-reduced-motion:reduce){.cta{animation:none;}}
-
-  .modal-overlay {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(9, 12, 30, 0.9); display: flex; flex-direction: column;
-    justify-content: center; align-items: center; z-index: 100;
-    opacity: 0; pointer-events: none; transition: .3s;
-  }
-  .modal-overlay.show { opacity: 1; pointer-events: auto; }
-  .modal-box {
-    background: #192045; padding: 30px 24px; border-radius: 20px; width: 80%; max-width: 320px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 12px;
-  }
-  .modal-title { font-size: 18px; font-weight: 700; text-align: center; margin-bottom: 8px; }
-  .modal-btn {
-    font-size: 16px; font-weight: 700; padding: 14px; border-radius: 12px;
-    border: none; cursor: pointer; text-align: center;
-  }
-  .btn-kakao { background: #fee500; color: #191919; }
-  .btn-other { background: #2a3360; color: #fff; }
-  .btn-cancel { background: transparent; color: var(--muted); padding-top: 8px; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -136,16 +115,6 @@
     <div class="row">
       <button class="btn2 primary" id="retryBtn">Play again</button>
       <button class="btn2" id="shareBtn">Share score</button>
-    </div>
-  </div>
-
-  <!-- Custom Share Modal (For Android) -->
-  <div class="modal-overlay" id="shareModal">
-    <div class="modal-box">
-      <div class="modal-title">공유 방식 선택</div>
-      <button class="modal-btn btn-kakao" id="modalKakaoBtn">카카오톡</button>
-      <button class="modal-btn btn-other" id="modalOtherBtn">기타 (문자, 인스타 등)</button>
-      <button class="modal-btn btn-cancel" id="modalCancelBtn">취소</button>
     </div>
   </div>
 
@@ -469,8 +438,8 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
       const isAndroid = /android/i.test(navigator.userAgent);
 
       if (isAndroid) {
-        // Show custom modal for Android to avoid KakaoTalk image+text drop bug
-        document.getElementById('shareModal').classList.add('show');
+        // Android KakaoTalk drops text when sharing image. Share text only to get the link preview card.
+        await navigator.share({ title: 'STACK RUSH', text: text });
       } else {
         // iOS and others support sending image and text together perfectly natively.
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -486,72 +455,6 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
     // Fallback for browsers that do not support navigator.share
     navigator.clipboard.writeText(text).then(toast).catch(()=>{});
   }
-});
-
-// --- Modal & Kakao Logic -----------------------------------
-Kakao.init('ca7da54d895ecbdd5f6f2d1295df41ec');
-
-document.getElementById('modalCancelBtn').addEventListener('click', () => {
-  document.getElementById('shareModal').classList.remove('show');
-});
-
-document.getElementById('modalOtherBtn').addEventListener('click', async () => {
-  document.getElementById('shareModal').classList.remove('show');
-  const link = 'https://zamesdean.github.io';
-  const text = `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me? ${link}`;
-  
-  // Extract Blob again
-  const dataUrl = canvas.toDataURL('image/png');
-  const arr = dataUrl.split(',');
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while(n--){ u8arr[n] = bstr.charCodeAt(n); }
-  const file = new File([u8arr], 'stackrush.png', { type: 'image/png' });
-
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ title: 'STACK RUSH', text: text, files: [file] }); } catch(e){}
-  } else {
-    try { await navigator.share({ title: 'STACK RUSH', text: text }); } catch(e){}
-  }
-});
-
-document.getElementById('modalKakaoBtn').addEventListener('click', async () => {
-  document.getElementById('shareModal').classList.remove('show');
-  const link = 'https://zamesdean.github.io';
-  
-  // Extract Blob for Kakao upload
-  const dataUrl = canvas.toDataURL('image/png');
-  const arr = dataUrl.split(',');
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while(n--){ u8arr[n] = bstr.charCodeAt(n); }
-  const file = new File([u8arr], 'stackrush.png', { type: 'image/png' });
-
-  Kakao.Share.uploadImage({
-    file: [file]
-  }).then(function(response) {
-    let imageUrl = '';
-    if (response.infos && response.infos.original) {
-      imageUrl = response.infos.original.url;
-    } else if (Array.isArray(response.infos)) {
-      imageUrl = response.infos[0].url;
-    }
-    
-    Kakao.Share.sendDefault({
-      objectType: 'feed',
-      content: {
-        title: `SCORE: ${score} - STACK RUSH`,
-        description: `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me?`,
-        imageUrl: imageUrl,
-        link: { mobileWebUrl: link, webUrl: link },
-      },
-      buttons: [{ title: 'Play STACK RUSH', link: { mobileWebUrl: link, webUrl: link } }]
-    });
-  }).catch(function(error) {
-    console.error('Kakao Upload Error:', error);
-  });
 });
 
 function toast(){
