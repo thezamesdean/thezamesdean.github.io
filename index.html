@@ -414,48 +414,14 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
   // If inside KakaoTalk in-app browser (or navigator.share missing), use Kakao SDK to share back to Kakao.
   if (isKakaoTalk || !navigator.share) {
     try {
-      ctx.save();
-      ctx.fillStyle = 'rgba(9,12,30,.8)';
-      ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = '#ffd166';
-      ctx.font = '900 58px "Segoe UI", system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(`SCORE: ${score}`, W/2, H/2 - 24);
-      ctx.fillStyle = '#f4f6ff';
-      ctx.font = '800 24px "Segoe UI", system-ui, sans-serif';
-      ctx.fillText('STACK RUSH', W/2, H/2 + 24);
-      ctx.fillStyle = '#8a93c2';
-      ctx.font = '600 15px "Segoe UI", system-ui, sans-serif';
-      ctx.fillText('zamesdean.github.io', W/2, H/2 + 64);
-      ctx.restore();
-
-      const dataUrl = canvas.toDataURL('image/png');
-      const arr = dataUrl.split(',');
-      const bstr = atob(arr[1]);
-      let n = bstr.length;
-      const u8arr = new Uint8Array(n);
-      while(n--){ u8arr[n] = bstr.charCodeAt(n); }
-      const file = new File([u8arr], 'stackrush.png', { type: 'image/png' });
-
-      Kakao.Share.uploadImage({
-        file: [file]
-      }).then(function(response) {
-        let imageUrl = '';
-        if (response.infos && response.infos.original) imageUrl = response.infos.original.url;
-        else if (Array.isArray(response.infos)) imageUrl = response.infos[0].url;
-        
-        Kakao.Share.sendDefault({
-          objectType: 'feed',
-          content: {
-            title: `SCORE: ${score} - STACK RUSH`,
-            description: `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me?`,
-            imageUrl: imageUrl,
-            link: { mobileWebUrl: link, webUrl: link },
-          },
-          buttons: [{ title: 'Play STACK RUSH', link: { mobileWebUrl: link, webUrl: link } }]
-        });
-      }).catch(function(error) {
-         navigator.clipboard.writeText(text).then(toast).catch(()=>{});
+      Kakao.Share.sendDefault({
+        objectType: 'text',
+        text: `SCORE: ${score}\n\nI stacked ${score} blocks in STACK RUSH 🧱 Can you beat me?`,
+        link: {
+          mobileWebUrl: link,
+          webUrl: link,
+        },
+        buttonTitle: 'Play STACK RUSH',
       });
     } catch(e) {
       navigator.clipboard.writeText(text).then(toast).catch(()=>{});
