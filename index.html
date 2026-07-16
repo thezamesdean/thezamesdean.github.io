@@ -406,6 +406,25 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
   
   try {
     if (navigator.share) {
+      // Draw the brag text directly onto the canvas for the screenshot
+      ctx.save();
+      ctx.fillStyle = 'rgba(9,12,30,.8)';
+      ctx.fillRect(0, 0, W, H);
+      
+      ctx.fillStyle = '#ffd166';
+      ctx.font = '900 58px "Segoe UI", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`SCORE: ${score}`, W/2, H/2 - 24);
+      
+      ctx.fillStyle = '#f4f6ff';
+      ctx.font = '800 24px "Segoe UI", system-ui, sans-serif';
+      ctx.fillText('STACK RUSH', W/2, H/2 + 24);
+      
+      ctx.fillStyle = '#8a93c2';
+      ctx.font = '600 15px "Segoe UI", system-ui, sans-serif';
+      ctx.fillText('zamesdean.github.io', W/2, H/2 + 64);
+      ctx.restore();
+
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
       if (blob) {
         const file = new File([blob], 'stackrush.png', { type: 'image/png' });
