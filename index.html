@@ -405,11 +405,8 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
   const text = `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me?`;
   const fullText = `${text} ${link}`;
   
-  // 1. Proactively copy to clipboard WITHOUT awaiting to preserve user gesture token
-  navigator.clipboard.writeText(fullText).then(toast).catch(()=>{});
-  
-  try {
-    if (navigator.share) {
+  if (navigator.share) {
+    try {
       // Draw the brag text directly onto the canvas for the screenshot
       ctx.save();
       ctx.fillStyle = 'rgba(9,12,30,.8)';
@@ -439,14 +436,17 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
       const file = new File([u8arr], 'stackrush.png', { type: 'image/png' });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ title: 'STACK RUSH', text, url: link, files: [file] });
-          return;
-        } catch(e) {}
+        await navigator.share({ title: 'STACK RUSH', text, url: link, files: [file] });
+      } else {
+        await navigator.share({ title: 'STACK RUSH', text, url: link });
       }
-      await navigator.share({ title: 'STACK RUSH', text, url: link });
+    } catch(e) {
+      // User cancelled share or it failed
     }
-  } catch(e) {}
+  } else {
+    // Fallback for browsers that do not support navigator.share
+    navigator.clipboard.writeText(fullText).then(toast).catch(()=>{});
+  }
 });
 
 function toast(){
