@@ -77,7 +77,7 @@
   .go-score{font-size:88px;font-weight:800;line-height:1;letter-spacing:-3px;margin-bottom:4px;}
   .go-label{color:var(--muted);font-size:14px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:28px;}
   .go-best{color:var(--accent);font-size:15px;font-weight:700;margin-bottom:34px;}
-  .row{display:flex;gap:12px;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
   .btn2{
     font-size:16px;font-weight:700;padding:14px 26px;border-radius:999px;
     border:1.5px solid rgba(255,255,255,.25);background:transparent;color:var(--ink);cursor:pointer;
@@ -409,15 +409,25 @@ try {
   }
 } catch(e) { /* SDK unavailable — handled at share time */ }
 
-document.getElementById('shareBtn').addEventListener('click', async ()=>{
-  const link = 'https://zamesdean.github.io';
-  const text = `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me? ${link}`;
-  const isKakaoTalk = /KAKAOTALK/i.test(navigator.userAgent);
+// One share button, routed by environment:
+//  - Real browsers (Chrome / Samsung Internet / Safari): the OS share
+//    sheet with the tower screenshot attached — KakaoTalk, Instagram,
+//    LINE, Messages all show up. (Note: picking KakaoTalk here delivers
+//    image + text as separate messages; that's how its share extension
+//    works.)
+//  - KakaoTalk in-app browser: it has no OS share sheet, so we send a
+//    Kakao feed card instead — screenshot + text + button in one bubble.
+//  - Neither available: copy the brag text.
 
-  // --- screenshot: the block tower with the score on top -------
-  // Drawn synchronously onto the game canvas; the next animation
-  // frame repaints the game before anything hits the screen, so
-  // players never see this overlay. .5 keeps the tower visible.
+const SHARE_LINK = 'https://zamesdean.github.io';
+function brag(){
+  return `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me? ${SHARE_LINK}`;
+}
+
+// Tower + score overlay, drawn synchronously onto the game canvas and
+// captured as a PNG file. The next animation frame repaints the game
+// before anything hits the screen, so players never see the overlay.
+function makeScoreCard(){
   ctx.save();
   ctx.fillStyle = 'rgba(9,12,30,.5)';
   ctx.fillRect(0, 0, W, H);
@@ -434,31 +444,42 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
   ctx.restore();
 
   const dataUrl = canvas.toDataURL('image/png');
-  const arr = dataUrl.split(',');
-  const bstr = atob(arr[1]);
+  const bstr = atob(dataUrl.split(',')[1]);
   let n = bstr.length;
   const u8arr = new Uint8Array(n);
   while(n--){ u8arr[n] = bstr.charCodeAt(n); }
-  const file = new File([u8arr], 'stackrush.png', { type: 'image/png' });
+  return new File([u8arr], 'stackrush.png', { type: 'image/png' });
+}
 
-  // --- KakaoTalk in-app browser: no OS share sheet exists here,
-  // so send a Kakao feed card. Upload the tower screenshot so the
-  // card shows the actual game; fall back to the static share.jpg
-  // only if the upload fails.
-  if (isKakaoTalk || !navigator.share) {
-    // SDK never loaded? Copy the brag text instead of crashing.
-    if (!window.Kakao || !Kakao.isInitialized()) {
-      navigator.clipboard.writeText(text).then(toast).catch(()=>{});
-      return;
+document.getElementById('shareBtn').addEventListener('click', async ()=>{
+  const text = brag();
+
+  // 1) OS share sheet whenever the browser has one.
+  if (navigator.share) {
+    const file = makeScoreCard();
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ title: 'STACK RUSH', text: text, files: [file] });
+      } else {
+        await navigator.share({ title: 'STACK RUSH', text: text });
+      }
+    } catch(e) {
+      // user closed the sheet — nothing to do
     }
-    let imageUrl = `${link}/share.jpg`;
+    return;
+  }
+
+  // 2) KakaoTalk in-app browser: Kakao feed card with the screenshot.
+  if (window.Kakao && Kakao.isInitialized()) {
+    const file = makeScoreCard();
+    let imageUrl = SHARE_LINK + '/share.jpg';   // static fallback image
     try {
       const res = await Kakao.Share.uploadImage({ file: [file] });
       const infos = res && res.infos;
       if (infos && infos.original && infos.original.url) imageUrl = infos.original.url;
       else if (Array.isArray(infos) && infos[0] && infos[0].url) imageUrl = infos[0].url;
     } catch(err) {
-      // keep the static fallback image
+      // upload failed — the card still goes out with share.jpg
     }
     try {
       Kakao.Share.sendDefault({
@@ -469,30 +490,18 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
           imageUrl: imageUrl,
           imageWidth: canvas.width,
           imageHeight: canvas.height,
-          link: { mobileWebUrl: link, webUrl: link },
+          link: { mobileWebUrl: SHARE_LINK, webUrl: SHARE_LINK },
         },
-        buttons: [{ title: 'Play STACK RUSH', link: { mobileWebUrl: link, webUrl: link } }]
+        buttons: [{ title: 'Play STACK RUSH', link: { mobileWebUrl: SHARE_LINK, webUrl: SHARE_LINK } }]
       });
+      return;
     } catch(e) {
-      navigator.clipboard.writeText(text).then(toast).catch(()=>{});
+      // fall through to clipboard
     }
-    return;
   }
 
-  // --- Regular browsers (Chrome / Safari / Samsung Internet):
-  // OS share sheet with the screenshot attached. Including the image
-  // is what makes Instagram (and similar image-only apps) appear as
-  // share targets — text-only shares don't reach them. toDataURL is
-  // synchronous, so the tap gesture survives and share always fires.
-  try {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ title: 'STACK RUSH', text: text, files: [file] });
-    } else {
-      await navigator.share({ title: 'STACK RUSH', text: text });
-    }
-  } catch(e) {
-    // user closed the share sheet — nothing to do
-  }
+  // 3) Last resort: copy the brag text.
+  navigator.clipboard.writeText(text).then(toast).catch(()=>{});
 });
 
 function toast(){
