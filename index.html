@@ -478,10 +478,13 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
   if (navigator.share) {
     const file = makeScoreCard();
     try {
+      // No `title` on purpose: messengers concatenate title + text, which
+      // printed "STACK RUSH" twice in the sent message. The screenshot and
+      // the link preview already carry the name.
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ title: 'STACK RUSH', text: text, files: [file] });
+        await navigator.share({ text: text, files: [file] });
       } else {
-        await navigator.share({ title: 'STACK RUSH', text: text });
+        await navigator.share({ text: text });
       }
     } catch(e) {
       // user closed the sheet — nothing to do
