@@ -415,13 +415,14 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
   if (isKakaoTalk || !navigator.share) {
     try {
       Kakao.Share.sendDefault({
-        objectType: 'text',
-        text: `SCORE: ${score}\n\nI stacked ${score} blocks in STACK RUSH 🧱 Can you beat me?`,
-        link: {
-          mobileWebUrl: link,
-          webUrl: link,
+        objectType: 'feed',
+        content: {
+          title: `SCORE: ${score} - STACK RUSH`,
+          description: `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me?`,
+          imageUrl: `${link}/share.jpg`,
+          link: { mobileWebUrl: link, webUrl: link },
         },
-        buttonTitle: 'Play STACK RUSH',
+        buttons: [{ title: 'Play STACK RUSH', link: { mobileWebUrl: link, webUrl: link } }]
       });
     } catch(e) {
       navigator.clipboard.writeText(text).then(toast).catch(()=>{});
