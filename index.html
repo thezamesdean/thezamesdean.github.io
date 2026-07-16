@@ -188,7 +188,7 @@ function spawn(){
   const hue = (210 + blocks.length * 24) % 360;
   
   // Speed is now in pixels per second for delta time rendering
-  speed = Math.min(380 + blocks.length * 20, 950);
+  speed = Math.min(350 + blocks.length * 12, 850);
   
   // start off-screen on alternating sides
   const fromLeft = blocks.length % 2 === 0;
@@ -214,8 +214,14 @@ function drop(){
   }
 
   const perfect = Math.abs(moving.x - top.x) < 6;
-  const w = perfect ? top.w : overlap;
-  const x = perfect ? top.x : overlapLeft;
+  let w = overlap;
+  let x = overlapLeft;
+
+  if (perfect) {
+    const bw = baseWidth();
+    w = Math.min(top.w + 16, bw);
+    x = top.x + (top.w - w) / 2;
+  }
 
   blocks.push({ x, w, hue: moving.hue, perfectFlash: perfect ? 1 : 0 });
   score++;
