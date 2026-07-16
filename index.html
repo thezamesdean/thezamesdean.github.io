@@ -401,25 +401,74 @@ document.getElementById('startBtn').addEventListener('click', startGame);
 document.getElementById('retryBtn').addEventListener('click', startGame);
 
 // --- share (the viral hook) --------------------------------
-Kakao.init('ca7da54d895ecbdd5f6f2d1295df41ec');
+// Guarded init: if the Kakao SDK failed to load (ad blocker, offline,
+// sandboxed preview), the game must still boot — share just falls back.
+try {
+  if (window.Kakao && !Kakao.isInitialized()) {
+    Kakao.init('ca7da54d895ecbdd5f6f2d1295df41ec');
+  }
+} catch(e) { /* SDK unavailable — handled at share time */ }
 
 document.getElementById('shareBtn').addEventListener('click', async ()=>{
   const link = 'https://zamesdean.github.io';
-  // Combine text and link into a single plain text string
   const text = `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me? ${link}`;
-  
   const isKakaoTalk = /KAKAOTALK/i.test(navigator.userAgent);
-  const isAndroid = /android/i.test(navigator.userAgent);
 
-  // If inside KakaoTalk in-app browser (or navigator.share missing), use Kakao SDK to share back to Kakao.
+  // --- screenshot: the block tower with the score on top -------
+  // Drawn synchronously onto the game canvas; the next animation
+  // frame repaints the game before anything hits the screen, so
+  // players never see this overlay. .5 keeps the tower visible.
+  ctx.save();
+  ctx.fillStyle = 'rgba(9,12,30,.5)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#ffd166';
+  ctx.font = '900 58px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`SCORE: ${score}`, W/2, H/2 - 24);
+  ctx.fillStyle = '#f4f6ff';
+  ctx.font = '800 24px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText('STACK RUSH', W/2, H/2 + 24);
+  ctx.fillStyle = '#c7cdea';
+  ctx.font = '600 15px "Segoe UI", system-ui, sans-serif';
+  ctx.fillText('zamesdean.github.io', W/2, H/2 + 64);
+  ctx.restore();
+
+  const dataUrl = canvas.toDataURL('image/png');
+  const arr = dataUrl.split(',');
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+  const file = new File([u8arr], 'stackrush.png', { type: 'image/png' });
+
+  // --- KakaoTalk in-app browser: no OS share sheet exists here,
+  // so send a Kakao feed card. Upload the tower screenshot so the
+  // card shows the actual game; fall back to the static share.jpg
+  // only if the upload fails.
   if (isKakaoTalk || !navigator.share) {
+    // SDK never loaded? Copy the brag text instead of crashing.
+    if (!window.Kakao || !Kakao.isInitialized()) {
+      navigator.clipboard.writeText(text).then(toast).catch(()=>{});
+      return;
+    }
+    let imageUrl = `${link}/share.jpg`;
+    try {
+      const res = await Kakao.Share.uploadImage({ file: [file] });
+      const infos = res && res.infos;
+      if (infos && infos.original && infos.original.url) imageUrl = infos.original.url;
+      else if (Array.isArray(infos) && infos[0] && infos[0].url) imageUrl = infos[0].url;
+    } catch(err) {
+      // keep the static fallback image
+    }
     try {
       Kakao.Share.sendDefault({
         objectType: 'feed',
         content: {
           title: `SCORE: ${score} - STACK RUSH`,
           description: `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me?`,
-          imageUrl: `${link}/share.jpg`,
+          imageUrl: imageUrl,
+          imageWidth: canvas.width,
+          imageHeight: canvas.height,
           link: { mobileWebUrl: link, webUrl: link },
         },
         buttons: [{ title: 'Play STACK RUSH', link: { mobileWebUrl: link, webUrl: link } }]
@@ -430,48 +479,19 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
     return;
   }
 
-  // Native OS Share (Non-KakaoTalk browsers like Chrome, Safari)
+  // --- Regular browsers (Chrome / Safari / Samsung Internet):
+  // OS share sheet with the screenshot attached. Including the image
+  // is what makes Instagram (and similar image-only apps) appear as
+  // share targets — text-only shares don't reach them. toDataURL is
+  // synchronous, so the tap gesture survives and share always fires.
   try {
-    if (isAndroid) {
-      // Android Chrome: skip image to prevent gesture timeout and allow text-only share for Kakao Link Preview
-      await navigator.share({ title: 'STACK RUSH', text: text });
-      return;
-    }
-
-    // iOS and others: Draw the brag text directly onto the canvas for the screenshot
-    ctx.save();
-    ctx.fillStyle = 'rgba(9,12,30,.8)';
-    ctx.fillRect(0, 0, W, H);
-    
-    ctx.fillStyle = '#ffd166';
-    ctx.font = '900 58px "Segoe UI", system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`SCORE: ${score}`, W/2, H/2 - 24);
-    
-    ctx.fillStyle = '#f4f6ff';
-    ctx.font = '800 24px "Segoe UI", system-ui, sans-serif';
-    ctx.fillText('STACK RUSH', W/2, H/2 + 24);
-    
-    ctx.fillStyle = '#8a93c2';
-    ctx.font = '600 15px "Segoe UI", system-ui, sans-serif';
-    ctx.fillText('zamesdean.github.io', W/2, H/2 + 64);
-    ctx.restore();
-
-    const dataUrl = canvas.toDataURL('image/png');
-    const arr = dataUrl.split(',');
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while(n--){ u8arr[n] = bstr.charCodeAt(n); }
-    const file = new File([u8arr], 'stackrush.png', { type: 'image/png' });
-
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({ title: 'STACK RUSH', text: text, files: [file] });
     } else {
       await navigator.share({ title: 'STACK RUSH', text: text });
     }
   } catch(e) {
-    // User cancelled share or it failed
+    // user closed the share sheet — nothing to do
   }
 });
 
