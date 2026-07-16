@@ -405,11 +405,8 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
   const text = `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me?`;
   const fullText = `${text} ${link}`;
   
-  // 1. Proactively copy to clipboard because some apps (like Kakao) strip text/URLs when sharing an image.
-  try {
-    await navigator.clipboard.writeText(fullText);
-    toast();
-  } catch(e) {}
+  // 1. Proactively copy to clipboard WITHOUT awaiting to preserve user gesture token
+  navigator.clipboard.writeText(fullText).then(toast).catch(()=>{});
   
   try {
     if (navigator.share) {
@@ -432,16 +429,20 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
       ctx.fillText('zamesdean.github.io', W/2, H/2 + 64);
       ctx.restore();
 
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-      if (blob) {
-        const file = new File([blob], 'stackrush.png', { type: 'image/png' });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            // 2. Use the explicit 'url' field which some OS share sheets respect more than text
-            await navigator.share({ title: 'STACK RUSH', text, url: link, files: [file] });
-            return;
-          } catch(e) {} // Fall through to text-only if user cancels or it fails
-        }
+      // Use synchronous DataURL to prevent user gesture expiration on mobile browsers
+      const dataUrl = canvas.toDataURL('image/png');
+      const arr = dataUrl.split(',');
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+      const file = new File([u8arr], 'stackrush.png', { type: 'image/png' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ title: 'STACK RUSH', text, url: link, files: [file] });
+          return;
+        } catch(e) {}
       }
       await navigator.share({ title: 'STACK RUSH', text, url: link });
     }
