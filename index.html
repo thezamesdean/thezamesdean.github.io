@@ -249,11 +249,16 @@ function spawn(){
   const hue = (210 + blocks.length * 24) % 360;
   
   // Pixels per second (delta-timed, so 60Hz and 144Hz play the same).
-  // Deliberately uncapped: the old min(..., 850) froze the difficulty at
-  // 42 blocks, and a precise player then regrew width faster than they
-  // shaved it and simply never died. Simulated at 9ms tap jitter that
-  // ran forever; now the curve keeps climbing until it ends every run.
-  speed = 350 + blocks.length * 12;
+  //
+  // Uncapped on purpose: the old min(..., 850) froze the difficulty at 42
+  // blocks, and a precise player then regrew width faster than they shaved
+  // it and simply never died.
+  //
+  // The slope is 20, not 12, because at 12 the game only got tense around
+  // the 21st block — longer than a typical whole run, so most players spent
+  // the entire game coasting. The opening speed is left alone so a first
+  // drop still reads as gentle; it's the climb that bites now.
+  speed = 350 + blocks.length * 20;
   
   // start off-screen on alternating sides
   const fromLeft = blocks.length % 2 === 0;
