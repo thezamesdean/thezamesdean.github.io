@@ -564,10 +564,10 @@ function challengeUrl(){
 // target, and the screenshot and preview card both say STACK RUSH, so
 // spelling all that out again just softened it. A dare beats a boast.
 function brag(){
-  if(score === 0) return `One tap. One tower. 🧱 ${SHARE_LINK}`;
+  if(score === 0) return `SCORE: 0\n\nCan you beat me? 🧱 ${SHARE_LINK}`;
   return targetIsRival && beaten
-    ? `Beat your ${target}. Now try ${score}. 🧱 ${challengeUrl()}`
-    : `Beat ${score}. 🧱 ${challengeUrl()}`;
+    ? `SCORE: ${score}\n\nI beat your ${target}! Can you beat me? 🧱 ${challengeUrl()}`
+    : `SCORE: ${score}\n\nCan you beat me? 🧱 ${challengeUrl()}`;
 }
 
 // Tower + score overlay, drawn synchronously onto the game canvas and
@@ -637,14 +637,14 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
         content: {
           title: `SCORE: ${score} - STACK RUSH`,
           description: targetIsRival && beaten
-            ? `Beat ${target}. Now it's ${score}.`
-            : 'One tap. One tower.',
+            ? `I beat your ${target}! Can you beat me?`
+            : `Can you beat me?`,
           imageUrl: imageUrl,
           imageWidth: canvas.width,
           imageHeight: canvas.height,
           link: { mobileWebUrl: url, webUrl: url },
         },
-        buttons: [{ title: `Beat ${score}`, link: { mobileWebUrl: url, webUrl: url } }]
+        buttons: [{ title: `Play STACK RUSH`, link: { mobileWebUrl: url, webUrl: url } }]
       });
       return;
     } catch(e) {
