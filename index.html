@@ -407,7 +407,15 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
   
   if (navigator.share) {
     try {
-      // Draw the brag text directly onto the canvas for the screenshot
+      const isAndroid = /android/i.test(navigator.userAgent);
+      
+      if (isAndroid) {
+        // Android: Skip image generation to prevent gesture timeout, and share text only for Kakao link card
+        await navigator.share({ title: 'STACK RUSH', text: text });
+        return;
+      }
+
+      // iOS and others: Draw the brag text directly onto the canvas for the screenshot
       ctx.save();
       ctx.fillStyle = 'rgba(9,12,30,.8)';
       ctx.fillRect(0, 0, W, H);
@@ -435,18 +443,10 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
       while(n--){ u8arr[n] = bstr.charCodeAt(n); }
       const file = new File([u8arr], 'stackrush.png', { type: 'image/png' });
 
-      const isAndroid = /android/i.test(navigator.userAgent);
-
-      if (isAndroid) {
-        // Android KakaoTalk drops text when sharing image. Share text only to get the link preview card.
-        await navigator.share({ title: 'STACK RUSH', text: text });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ title: 'STACK RUSH', text: text, files: [file] });
       } else {
-        // iOS and others support sending image and text together perfectly natively.
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ title: 'STACK RUSH', text: text, files: [file] });
-        } else {
-          await navigator.share({ title: 'STACK RUSH', text: text });
-        }
+        await navigator.share({ title: 'STACK RUSH', text: text });
       }
     } catch(e) {
       // User cancelled share or it failed
