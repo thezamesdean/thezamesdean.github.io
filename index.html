@@ -401,18 +401,28 @@ document.getElementById('retryBtn').addEventListener('click', startGame);
 
 // --- share (the viral hook) --------------------------------
 document.getElementById('shareBtn').addEventListener('click', async ()=>{
-  // TODO when you deploy: put your real game link here 👇
   const link = 'https://zamesdean.github.io';
   const text = `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me? ${link}`;
-  try{
-    if(navigator.share){
-      await navigator.share({ title:'STACK RUSH', text });
-    }else{
+  
+  try {
+    if (navigator.share) {
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (blob) {
+        const file = new File([blob], 'stackrush.png', { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ title: 'STACK RUSH', text, files: [file] });
+            return;
+          } catch(e) {} // Fall through to text-only if user cancels or it fails
+        }
+      }
+      await navigator.share({ title: 'STACK RUSH', text });
+    } else {
       await navigator.clipboard.writeText(text);
       toast();
     }
-  }catch(e){
-    try{ await navigator.clipboard.writeText(text); toast(); }catch(_){}
+  } catch(e) {
+    try { await navigator.clipboard.writeText(text); toast(); } catch(_){}
   }
 });
 
