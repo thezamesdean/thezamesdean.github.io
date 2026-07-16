@@ -402,7 +402,14 @@ document.getElementById('retryBtn').addEventListener('click', startGame);
 // --- share (the viral hook) --------------------------------
 document.getElementById('shareBtn').addEventListener('click', async ()=>{
   const link = 'https://zamesdean.github.io';
-  const text = `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me? ${link}`;
+  const text = `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me?`;
+  const fullText = `${text} ${link}`;
+  
+  // 1. Proactively copy to clipboard because some apps (like Kakao) strip text/URLs when sharing an image.
+  try {
+    await navigator.clipboard.writeText(fullText);
+    toast();
+  } catch(e) {}
   
   try {
     if (navigator.share) {
@@ -430,19 +437,15 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
         const file = new File([blob], 'stackrush.png', { type: 'image/png' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
-            await navigator.share({ title: 'STACK RUSH', text, files: [file] });
+            // 2. Use the explicit 'url' field which some OS share sheets respect more than text
+            await navigator.share({ title: 'STACK RUSH', text, url: link, files: [file] });
             return;
           } catch(e) {} // Fall through to text-only if user cancels or it fails
         }
       }
-      await navigator.share({ title: 'STACK RUSH', text });
-    } else {
-      await navigator.clipboard.writeText(text);
-      toast();
+      await navigator.share({ title: 'STACK RUSH', text, url: link });
     }
-  } catch(e) {
-    try { await navigator.clipboard.writeText(text); toast(); } catch(_){}
-  }
+  } catch(e) {}
 });
 
 function toast(){
