@@ -135,7 +135,7 @@
   <div class="screen" id="startScreen">
     <div class="title">STACK<br>RUSH</div>
     <div class="chal gone" id="chalBanner">
-      <div class="chal-label">Your target</div>
+      <div class="chal-label" id="chalLabel">Your target</div>
       <div class="chal-num" id="chalNum">0</div>
       <div class="chal-label">blocks to beat</div>
     </div>
@@ -215,7 +215,17 @@ const challenge = (()=>{
   const n = parseInt(new URLSearchParams(location.search).get('c'), 10);
   return (Number.isFinite(n) && n > 0 && n < 10000) ? n : 0;
 })();
-let beaten;                  // did this run clear the challenge?
+let beaten;                  // did this run clear the target?
+let target;                  // the number to beat on this run
+let targetIsRival;           // is the target a friend's, or your own best?
+
+// The line to beat is always the highest bar in play: a friend's linked
+// score, or your own record. Recomputed every run, so it climbs by itself
+// as you improve — there is never a run without something to chase.
+function setTarget(){
+  target = Math.max(challenge, best);
+  targetIsRival = challenge > 0 && challenge >= best;
+}
 
 function baseWidth(){ return Math.min(W * 0.62, 260); }
 
@@ -229,6 +239,7 @@ function reset(){
   camY = 0; targetCamY = 0;
   shake = 0; flashes = [];
   beaten = false;
+  setTarget();
   lastTime = 0;
   spawn();
 }
@@ -237,8 +248,12 @@ function spawn(){
   const top = blocks[blocks.length-1];
   const hue = (210 + blocks.length * 24) % 360;
   
-  // Speed is now in pixels per second for delta time rendering
-  speed = Math.min(350 + blocks.length * 12, 850);
+  // Pixels per second (delta-timed, so 60Hz and 144Hz play the same).
+  // Deliberately uncapped: the old min(..., 850) froze the difficulty at
+  // 42 blocks, and a precise player then regrew width faster than they
+  // shaved it and simply never died. Simulated at 9ms tap jitter that
+  // ran forever; now the curve keeps climbing until it ends every run.
+  speed = 350 + blocks.length * 12;
   
   // start off-screen on alternating sides
   const fromLeft = blocks.length % 2 === 0;
@@ -268,8 +283,10 @@ function drop(){
   let x = overlapLeft;
 
   if (perfect) {
+    // +8, not +16: the bigger reward let good players out-regrow their
+    // own mistakes, which is what inflated scores into the hundreds.
     const bw = baseWidth();
-    w = Math.min(top.w + 16, bw);
+    w = Math.min(top.w + 8, bw);
     x = top.x + (top.w - w) / 2;
   }
 
@@ -285,8 +302,8 @@ function drop(){
     beep(330);
   }
 
-  // the moment the challenge falls — make it unmistakable
-  if(challenge && !beaten && score > challenge){
+  // the moment the bar falls — make it unmistakable
+  if(target && !beaten && score > target){
     beaten = true;
     shake = 18;
     flashes.push({ x:W/2, y:blockY(blocks.length-1), r:10, life:1 });
@@ -309,12 +326,17 @@ function gameOver(){
   document.getElementById('finalScore').textContent = score;
 
   const cr = document.getElementById('chalResult');
-  if(challenge){
+  if(target){
     cr.classList.remove('gone');
     cr.classList.toggle('win', beaten);
-    cr.textContent = beaten
-      ? `You beat ${challenge}!`
-      : `${challenge - score + 1} more to beat ${challenge}`;
+    if(beaten){
+      cr.textContent = targetIsRival ? `You beat ${target}!` : 'New personal best!';
+    } else {
+      const need = target - score + 1;
+      cr.textContent = targetIsRival
+        ? `${need} more to beat ${target}`
+        : `${need} more to beat your best`;
+    }
   } else {
     cr.classList.add('gone');
   }
@@ -402,8 +424,8 @@ function draw(time){
 // target is above the viewport the pill sticks to the top edge with an
 // arrow, so you always know how far there is left to climb.
 function drawTarget(){
-  if(!challenge) return;
-  const ly = blockY(challenge);
+  if(!target) return;
+  const ly = blockY(target);
   const rgb = beaten ? '126,231,159' : '255,209,102';
 
   if(ly > 6 && ly < H - 6){
@@ -416,7 +438,9 @@ function drawTarget(){
   }
 
   const above = ly <= 6;
-  const label = beaten ? 'BEAT ' + challenge : (above ? challenge + ' \u2191' : String(challenge));
+  const label = beaten
+    ? (targetIsRival ? 'BEAT ' + target : 'NEW BEST')
+    : (above ? target + ' \u2191' : String(target));
   const py = Math.max(28, Math.min(ly - 15, H - 28));
   ctx.save();
   ctx.font = '800 13px "Segoe UI", system-ui, sans-serif';
@@ -531,10 +555,14 @@ const SHARE_LINK = 'https://zamesdean.github.io';
 function challengeUrl(){
   return score > 0 ? `${SHARE_LINK}/?c=${score}` : SHARE_LINK;
 }
+// Kept short on purpose. The link already hands over the score as a
+// target, and the screenshot and preview card both say STACK RUSH, so
+// spelling all that out again just softened it. A dare beats a boast.
 function brag(){
-  return challenge && beaten
-    ? `I beat ${challenge} with ${score} blocks in STACK RUSH 🧱 Your turn: ${challengeUrl()}`
-    : `I stacked ${score} blocks in STACK RUSH 🧱 Can you beat me? ${challengeUrl()}`;
+  if(score === 0) return `One tap. One tower. 🧱 ${SHARE_LINK}`;
+  return targetIsRival && beaten
+    ? `Beat your ${target}. Now try ${score}. 🧱 ${challengeUrl()}`
+    : `Beat ${score}. 🧱 ${challengeUrl()}`;
 }
 
 // Tower + score overlay, drawn synchronously onto the game canvas and
@@ -603,9 +631,9 @@ document.getElementById('shareBtn').addEventListener('click', async ()=>{
         objectType: 'feed',
         content: {
           title: `SCORE: ${score} - STACK RUSH`,
-          description: challenge && beaten
-            ? `I beat ${challenge}. Now beat ${score}. 🧱`
-            : `I stacked ${score} blocks 🧱 Can you beat me?`,
+          description: targetIsRival && beaten
+            ? `Beat ${target}. Now it's ${score}.`
+            : 'One tap. One tower.',
           imageUrl: imageUrl,
           imageWidth: canvas.width,
           imageHeight: canvas.height,
@@ -637,12 +665,13 @@ document.getElementById('best').textContent = 'BEST ' + best;
 
 // An arriving challenge takes over the start screen: the number someone
 // else hit is the whole pitch, so the generic how-to-play line steps aside.
-if(challenge){
-  document.getElementById('chalNum').textContent = challenge;
+if(target){
+  document.getElementById('chalNum').textContent = target;
+  document.getElementById('chalLabel').textContent = targetIsRival ? 'Your target' : 'Your best';
   document.getElementById('chalBanner').classList.remove('gone');
   document.getElementById('startSub').classList.add('gone');
   document.getElementById('startBtn').textContent = 'BEAT IT';
-  document.title = `Beat ${challenge} — STACK RUSH`;
+  if(targetIsRival) document.title = `Beat ${target} — STACK RUSH`;
 }
 requestAnimationFrame(draw);
 </script>
