@@ -35,7 +35,7 @@
     -webkit-tap-highlight-color: transparent;
     transition: background-color .35s ease;
     min-height: 100vh;
-    scroll-snap-type: y proximity;
+    scroll-snap-type: y mandatory;
   }
   @media (prefers-reduced-motion: reduce) { body { transition: none; } }
 
@@ -105,7 +105,7 @@
   .rowbox { width: 100%; flex: 1; display: flex; flex-direction: column; }
 
   .drow {
-    display: flex; align-items: center; gap: 2.5vmin;
+    display: flex; align-items: center; gap: 2vmin;
     padding: 2.2vmin 0;
     border-bottom: .35vmin solid rgba(255,255,255,.3);
     flex: 1 1 0; min-height: 64px;
@@ -114,22 +114,29 @@
   .drow:last-child { border-bottom: 0; }
 
   .drow .lbl  {
-    flex: 0 0 33vmin; text-align: left;
-    font-size: 5.8vmin; font-weight: 800;
+    flex: 0 0 25vmin; text-align: left;
+    font-size: 5.4vmin; font-weight: 800;
     white-space: nowrap;
     display: flex; flex-direction: column;
     align-items: flex-start; justify-content: center;
     line-height: 1.15;
   }
-  .drow .lbl .date { font-size: 4vmin; font-weight: 700; opacity: .8; }
+  .drow .lbl .date { font-size: 3.7vmin; font-weight: 700; opacity: .8; }
+
   .drow .ico  {
-    flex: 0 0 13vmin; width: 13vmin; height: 13vmin;
+    flex: 0 0 11vmin; width: 11vmin; height: 11vmin;
     display: flex; align-items: center; justify-content: center;
-    font-size: 8.6vmin; line-height: 1;
+    font-size: 7.4vmin; line-height: 1;
     filter: drop-shadow(0 .3vmin .6vmin rgba(0,0,0,.4));
   }
-  .drow .note { flex: 1; min-width: 0; text-align: left; font-size: 4.4vmin; font-weight: 700; opacity: .9; white-space: nowrap; }
-  .drow .tmp  { flex: 0 0 auto; text-align: right; font-size: 5.8vmin; font-weight: 800; white-space: nowrap; }
+
+  .drow .dust {
+    flex: 0 0 9.5vmin; width: 9.5vmin; height: 9.5vmin;
+    filter: drop-shadow(0 .2vmin .5vmin rgba(0,0,0,.35));
+  }
+
+  .drow .note { flex: 1; min-width: 0; text-align: left; font-size: 4.1vmin; font-weight: 700; opacity: .9; white-space: nowrap; }
+  .drow .tmp  { flex: 0 0 auto; text-align: right; font-size: 5.6vmin; font-weight: 800; white-space: nowrap; }
 
   .sheet {
     position: fixed; inset: 0; background: #111; color: #fff;
@@ -368,6 +375,21 @@
   var GRADE_NAME = ["좋음", "보통", "나쁨", "매우 나쁨"];
   var GRADE_BG   = ["#1565C0", "#0B6B3A", "#F07800", "#C0392B"];
 
+  /* 목록에 붙는 작은 미세먼지 얼굴 (색 = 등급) */
+  var MINI = [
+    '<circle cx="36" cy="40" r="6" fill="#fff"/><circle cx="64" cy="40" r="6" fill="#fff"/><path d="M30 58 Q50 78 70 58" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/>',
+    '<circle cx="36" cy="40" r="6" fill="#fff"/><circle cx="64" cy="40" r="6" fill="#fff"/><path d="M32 62 Q50 70 68 62" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/>',
+    '<circle cx="36" cy="42" r="6" fill="#fff"/><circle cx="64" cy="42" r="6" fill="#fff"/><path d="M32 70 Q50 54 68 70" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/>',
+    '<path d="M26 32 L44 42" stroke="#fff" stroke-width="7" stroke-linecap="round"/><path d="M74 32 L56 42" stroke="#fff" stroke-width="7" stroke-linecap="round"/><circle cx="36" cy="50" r="5.5" fill="#fff"/><circle cx="64" cy="50" r="5.5" fill="#fff"/><path d="M32 74 Q50 56 68 74" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/>'
+  ];
+
+  function dustIcon(g) {
+    if (g == null) return '<span class="dust"></span>';
+    return '<svg class="dust" viewBox="0 0 100 100" aria-hidden="true">' +
+             '<circle cx="50" cy="50" r="49" fill="' + GRADE_BG[g] + '"/>' + MINI[g] +
+           '</svg>';
+  }
+
   function decide(d) {
     var g = dustGrade(d.pm10, d.pm25);
     var todo = [], labels = [], state = "best", face = 0;
@@ -409,7 +431,7 @@
     body.setAttribute("data-state", r.state);
     $("face").innerHTML = FACES[r.face];
     $("action").textContent = r.action;
-    $("sub").textContent = r.label + " · " + Math.round(d.temp) + "도";
+    $("sub").textContent = r.label + " · " + Math.round(d.temp) + "\u00B0";
     $("hint").textContent = "화면을 누르면 자세히";
     document.querySelector('meta[name="theme-color"]').setAttribute("content", BG[r.state]);
   }
@@ -431,10 +453,11 @@
     lastData = null;
   }
 
-  function drow(lbl, code, pop, note, tmp, hour) {
+  function drow(lbl, code, pop, note, tmp, hour, dg) {
     return '<div class="drow">' +
              '<span class="lbl">' + lbl + '</span>' +
              '<span class="ico" aria-hidden="true">' + iconFor(code, pop, hour) + '</span>' +
+             dustIcon(dg) +
              '<span class="note">' + note + '</span>' +
              '<span class="tmp">' + tmp + '</span>' +
            '</div>';
@@ -443,13 +466,12 @@
   /* ── 오늘: 지금 시각부터 3시간 간격 ───────────── */
   function pad(n) { return (n < 10 ? "0" : "") + n; }
 
-  function drawToday(H) {
+  function drawToday(H, AIR) {
     var now = new Date();
     var nowKey = now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" +
                  pad(now.getDate()) + "T" + pad(now.getHours());
     var todayDate = nowKey.slice(0, 10);
 
-    /* 3시간 눈금(0·3·6·9·12·15·18·21) 중 다음 것부터 */
     var start = -1;
     for (var i = 0; i < H.time.length; i++) {
       if (H.time[i].slice(0, 13) <= nowKey) continue;
@@ -469,7 +491,8 @@
       var pop = H.precipitation_probability ? H.precipitation_probability[idx] : null;
       var w = wordFor(code) || (pop >= 60 ? "비" : "");
       var note = w ? (w + " " + (pop == null ? "" : pop + "%")) : "";
-      html += drow(lbl, code, pop, note, Math.round(H.temperature_2m[idx]) + "도", hh);
+      html += drow(lbl, code, pop, note,
+                   Math.round(H.temperature_2m[idx]) + "\u00B0", hh, AIR[t.slice(0, 13)]);
     }
     $("todayRows").innerHTML = html;
   }
@@ -477,7 +500,7 @@
   /* ── 이번 주: 7일 ─────────────────────────────── */
   var DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-  function drawWeek(D) {
+  function drawWeek(D, DAYDUST) {
     var html = "";
     var n = Math.min(7, D.time.length);
     for (var i = 0; i < n; i++) {
@@ -487,8 +510,9 @@
       var lbl = name + '<span class="date">' + (+p[1]) + "월 " + (+p[2]) + "일</span>";
       var code = D.weather_code[i];
       html += drow(lbl, code, null, wordFor(code),
-                   Math.round(D.temperature_2m_min[i]) + " → " +
-                   Math.round(D.temperature_2m_max[i]));
+                   Math.round(D.temperature_2m_min[i]) + "\u00B0 → " +
+                   Math.round(D.temperature_2m_max[i]) + "\u00B0",
+                   null, DAYDUST[D.time[i]]);
     }
     $("weekRows").innerHTML = html;
   }
@@ -508,7 +532,7 @@
       .then(function (r) { return r.json(); });
 
     var a = fetch("https://air-quality-api.open-meteo.com/v1/air-quality?" + q +
-        "&current=pm10,pm2_5")
+        "&current=pm10,pm2_5&hourly=pm10,pm2_5&forecast_days=7")
       .then(function (r) { return r.json(); })
       .catch(function () { return null; });
 
@@ -546,8 +570,20 @@
       }
 
       paint(decide(d), d);
-      if (W.hourly) drawToday(W.hourly);
-      if (W.daily)  drawWeek(W.daily);
+      /* 시간별·일별 미세먼지 등급 표 */
+      var AIR = {}, DAYDUST = {};
+      if (A && A.hourly && A.hourly.time) {
+        for (var m = 0; m < A.hourly.time.length; m++) {
+          var key = A.hourly.time[m].slice(0, 13);
+          var gg = dustGrade(A.hourly.pm10[m], A.hourly.pm2_5[m]);
+          AIR[key] = gg;
+          var day = key.slice(0, 10);
+          if (DAYDUST[day] == null || gg > DAYDUST[day]) DAYDUST[day] = gg;
+        }
+      }
+
+      if (W.hourly) drawToday(W.hourly, AIR);
+      if (W.daily)  drawWeek(W.daily, DAYDUST);
     }).catch(function () { showError(); });
   }
 
@@ -622,7 +658,7 @@
     var g25 = d.pm25 == null ? null : dustGrade(null, d.pm25);
 
     var rows = [
-      ["기온", Math.round(d.temp) + "도"],
+      ["기온", Math.round(d.temp) + "\u00B0"],
       ["미세먼지",   d.pm10 == null ? "모름" : Math.round(d.pm10) + badge(g10)],
       ["초미세먼지", d.pm25 == null ? "모름" : Math.round(d.pm25) + badge(g25)],
       ["습도", d.humid == null ? "모름" : Math.round(d.humid) + "%"],
