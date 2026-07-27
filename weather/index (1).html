@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B6B3A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="큰글씨 날씨">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230B6B3A'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='white' stroke-width='7'/%3E%3Ccircle cx='40' cy='42' r='4' fill='white'/%3E%3Ccircle cx='60' cy='42' r='4' fill='white'/%3E%3Cpath d='M36 58 Q50 70 64 58' fill='none' stroke='white' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
+<title>큰글씨 날씨</title>
+<style>
+  /* ── 큰글씨 UI 규칙 ────────────────────────────────
+     1. 시스템 글씨 배율에 의존하지 않는다 (vmin 고정)
+     2. 한 화면에 정보 5개 이하
+     3. 세로 배치만, 가로 스크롤 금지
+     4. 말줄임표 금지 — 넘치면 줄바꿈
+     5. 버튼은 손가락 두 개 너비 이상
+     6. 수치 대신 판정과 행동 (수치는 눌렀을 때만)
+     7. 광고 넣지 않는다
+     8. 미세먼지=얼굴(선), 날씨=컬러 그림(흰 동그라미)
+     ─────────────────────────────────────────────── */
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  html, body { margin: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+                 "Noto Sans KR", "Malgun Gothic", sans-serif;
+    background: #1F2937; color: #fff;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color .35s ease;
+    min-height: 100vh;
+    scroll-snap-type: y proximity;
+  }
+  @media (prefers-reduced-motion: reduce) { body { transition: none; } }
+
+  body[data-state="best"]    { background: #1565C0; color: #fff; }
+  body[data-state="good"]    { background: #0B6B3A; color: #fff; }
+  body[data-state="bad"]     { background: #F07800; color: #1A1A1A; }
+  body[data-state="worst"]   { background: #C0392B; color: #fff; }
+  body[data-state="neutral"] { background: #1F2937; color: #fff; }
+
+  .pane {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 3.5vmin 5vmin 4vmin; text-align: center;
+    min-height: 100vh;
+    scroll-snap-align: start;
+  }
+  @supports (height: 100dvh) { .pane { min-height: 100dvh; } }
+
+  #pane1 {
+    justify-content: space-between;
+    min-height: 100vh;
+    padding-top: max(4vmin, env(safe-area-inset-top));
+  }
+  @supports (height: 100dvh) { #pane1 { min-height: 100dvh; } }
+  #pane3 { padding-bottom: max(8vmin, env(safe-area-inset-bottom)); }
+
+  .place { font-size: 7.5vmin; font-weight: 800; line-height: 1.25; word-break: keep-all; }
+  .place.long { font-size: 5.8vmin; }
+  .today { font-size: 4.8vmin; font-weight: 700; opacity: .8; margin-top: 1vmin; }
+
+  .middle {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 2vmin; flex: 1; width: 100%; cursor: pointer;
+  }
+
+  .face { width: 38vmin; height: 38vmin; display: block; }
+
+  .action {
+    font-size: 9.5vmin; font-weight: 800; line-height: 1.35;
+    word-break: keep-all; max-width: 94%; white-space: pre-line;
+  }
+  .sub  { font-size: 5.2vmin; font-weight: 700; opacity: .85; word-break: keep-all; }
+  .hint { font-size: 4vmin; font-weight: 600; opacity: .55; }
+
+  .buttons { display: flex; flex-direction: column; gap: 2.5vmin; width: 100%; }
+
+  button {
+    font-family: inherit; font-size: 6.5vmin; font-weight: 700; color: inherit;
+    background: rgba(255,255,255,.16);
+    border: .6vmin solid currentColor; border-radius: 3vmin;
+    padding: 3.5vmin 3vmin; min-height: 88px; width: 100%;
+    cursor: pointer; word-break: keep-all;
+  }
+  body[data-state="bad"] button { background: rgba(0,0,0,.12); }
+  button:active { transform: scale(.98); }
+  button:focus-visible { outline: 1vmin solid currentColor; outline-offset: .8vmin; }
+
+  .down {
+    background: none; border: 0; min-height: 0; width: auto;
+    padding: 2vmin 0 0; font-size: 5.2vmin; font-weight: 800; opacity: .75;
+  }
+  .down .arrow { display: block; font-size: 6.5vmin; line-height: 1; }
+
+  #pane2 .down, #pane3 .down { margin-top: 3vmin; }
+
+  .pane h3 { font-size: 7.5vmin; font-weight: 800; margin: 0 0 2vmin; }
+  .rowbox { width: 100%; flex: 1; display: flex; flex-direction: column; }
+
+  .drow {
+    display: flex; align-items: center; gap: 2.5vmin;
+    padding: 2.2vmin 0;
+    border-bottom: .35vmin solid rgba(255,255,255,.3);
+    flex: 1 1 0; min-height: 64px;
+  }
+  body[data-state="bad"] .drow { border-bottom-color: rgba(0,0,0,.3); }
+  .drow:last-child { border-bottom: 0; }
+
+  .drow .lbl  {
+    flex: 0 0 33vmin; text-align: left;
+    font-size: 5.8vmin; font-weight: 800;
+    white-space: nowrap;
+    display: flex; flex-direction: column;
+    align-items: flex-start; justify-content: center;
+    line-height: 1.15;
+  }
+  .drow .lbl .date { font-size: 4vmin; font-weight: 700; opacity: .8; }
+  .drow .ico  {
+    flex: 0 0 13vmin; width: 13vmin; height: 13vmin;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8.6vmin; line-height: 1;
+    filter: drop-shadow(0 .3vmin .6vmin rgba(0,0,0,.4));
+  }
+  .drow .note { flex: 1; min-width: 0; text-align: left; font-size: 4.4vmin; font-weight: 700; opacity: .9; white-space: nowrap; }
+  .drow .tmp  { flex: 0 0 auto; text-align: right; font-size: 5.8vmin; font-weight: 800; white-space: nowrap; }
+
+  .sheet {
+    position: fixed; inset: 0; background: #111; color: #fff;
+    padding: 5vmin; overflow-y: auto; display: none; z-index: 10;
+  }
+  .sheet[data-open="true"] { display: block; }
+  .sheet h2 { font-size: 8vmin; font-weight: 800; margin: 2vmin 0 5vmin; text-align: center; }
+
+  #places button { background: rgba(255,255,255,.12); border-color: #fff; color: #fff; }
+
+  #detail[data-state="best"]  { background: #1565C0; color: #fff; }
+  #detail[data-state="good"]  { background: #0B6B3A; color: #fff; }
+  #detail[data-state="bad"]   { background: #F07800; color: #1A1A1A; }
+  #detail[data-state="worst"] { background: #C0392B; color: #fff; }
+  #detail button { background: rgba(255,255,255,.16); border-color: currentColor; color: inherit; }
+  #detail[data-state="bad"] button { background: rgba(0,0,0,.12); }
+
+  .rows { margin-bottom: 6vmin; }
+  .row {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 3vmin; padding: 3.5vmin 0;
+    border-bottom: .35vmin solid currentColor;
+    font-size: 6.5vmin; font-weight: 700; word-break: keep-all;
+  }
+  .row .val { font-weight: 800; text-align: right; }
+
+  .badge {
+    display: inline-block; margin-left: 2vmin;
+    padding: .8vmin 3vmin; border-radius: 2.5vmin;
+    border: .4vmin solid currentColor; font-weight: 800; white-space: nowrap;
+  }
+
+  .list { display: flex; flex-direction: column; gap: 2.5vmin; margin-bottom: 4vmin; }
+  .item { display: flex; gap: 2.5vmin; }
+  .item button { flex: 1; }
+  .item .del { flex: 0 0 20vmin; width: 20vmin; background: rgba(255,255,255,.06); font-size: 7vmin; }
+
+  .divider { margin: 6vmin 0 4vmin; font-size: 6vmin; font-weight: 800; opacity: .75; }
+  .findbar { display: flex; flex-direction: column; gap: 2.5vmin; }
+
+  input[type="text"] {
+    font-family: inherit; font-size: 7vmin; font-weight: 700;
+    color: #fff; background: rgba(255,255,255,.12);
+    border: .6vmin solid #fff; border-radius: 3vmin;
+    padding: 3.5vmin 3vmin; min-height: 88px; width: 100%;
+  }
+  input[type="text"]::placeholder { color: rgba(255,255,255,.5); }
+
+  .msg { font-size: 5.5vmin; font-weight: 700; line-height: 1.5; margin: 4vmin 0; opacity: .8; word-break: keep-all; }
+
+  @media (max-height: 640px) {
+    .face { width: 28vmin; height: 28vmin; }
+    .action { font-size: 7.5vmin; }
+  }
+</style>
+</head>
+<body data-state="neutral">
+
+<section class="pane" id="pane1">
+  <div class="place" id="place">성남 분당구</div>
+  <div class="today" id="todayDate"></div>
+  <div class="middle" id="middle">
+    <svg class="face" id="face" viewBox="0 0 100 100" aria-hidden="true"></svg>
+    <div class="action" id="action">날씨를 가져오는 중입니다</div>
+    <div class="sub" id="sub"></div>
+    <div class="hint" id="hint"></div>
+  </div>
+  <div class="buttons">
+    <button id="refresh" type="button">다시 보기</button>
+    <button id="change" type="button">지역 바꾸기</button>
+    <button class="down" id="godown" type="button">
+      <span class="arrow">▼</span>오늘 시간대별
+    </button>
+  </div>
+</section>
+
+<section class="pane" id="pane2">
+  <h3>오늘</h3>
+  <div class="rowbox" id="todayRows"></div>
+  <button class="down" id="goweek" type="button">
+    <span class="arrow">▼</span>이번 주
+  </button>
+</section>
+
+<section class="pane" id="pane3">
+  <h3>이번 주</h3>
+  <div class="rowbox" id="weekRows"></div>
+  <button class="down" id="gotop" type="button">
+    <span class="arrow">▲</span>맨 위로
+  </button>
+</section>
+
+<section class="sheet" id="detail" data-open="false" aria-label="자세한 수치">
+  <h2>자세히</h2>
+  <div class="rows" id="detailRows"></div>
+  <button id="detailClose" type="button">닫기</button>
+</section>
+
+<section class="sheet" id="places" data-open="false" aria-label="지역 고르기">
+  <h2>지역</h2>
+  <div class="list"><div class="item"><button id="useHere" type="button">현재 위치</button></div></div>
+  <div class="list" id="savedList"></div>
+  <div class="divider">지역 추가</div>
+  <div class="findbar">
+    <input type="text" id="findInput" placeholder="예: 분당, 강남, 판교동" autocomplete="off">
+    <button id="findBtn" type="button">찾기</button>
+  </div>
+  <div class="msg" id="findMsg"></div>
+  <div class="list" id="findList"></div>
+  <button id="placesClose" type="button">닫기</button>
+</section>
+
+<script>
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var body = document.body;
+
+  /* ── 한국 지역 목록 (앱에 내장) ────────────────── */
+  var KR = [
+    ["서울 종로구",37.573,126.979],["서울 중구",37.564,126.997],["서울 용산구",37.532,126.990],
+    ["서울 성동구",37.563,127.037],["서울 광진구",37.538,127.082],["서울 동대문구",37.574,127.040],
+    ["서울 중랑구",37.606,127.093],["서울 성북구",37.589,127.017],["서울 강북구",37.640,127.026],
+    ["서울 도봉구",37.669,127.047],["서울 노원구",37.654,127.056],["서울 은평구",37.603,126.929],
+    ["서울 서대문구",37.579,126.937],["서울 마포구",37.566,126.902],["서울 양천구",37.517,126.867],
+    ["서울 강서구",37.551,126.850],["서울 구로구",37.495,126.888],["서울 금천구",37.457,126.896],
+    ["서울 영등포구",37.526,126.896],["서울 동작구",37.512,126.940],["서울 관악구",37.478,126.952],
+    ["서울 서초구",37.484,127.033],["서울 강남구",37.518,127.047],["서울 송파구",37.515,127.106],
+    ["서울 강동구",37.530,127.124],
+
+    ["성남 분당구",37.383,127.119],["성남 수정구",37.450,127.145],["성남 중원구",37.430,127.137],
+    ["분당 판교동",37.395,127.111],["분당 백현동",37.392,127.111],["분당 정자동",37.366,127.108],
+    ["분당 서현동",37.385,127.123],["분당 야탑동",37.411,127.129],["분당 이매동",37.397,127.130],
+    ["분당 수내동",37.377,127.117],["분당 구미동",37.343,127.108],
+
+    ["수원",37.264,127.029],["용인",37.241,127.178],["고양",37.658,126.832],["부천",37.504,126.766],
+    ["안양",37.394,126.957],["안산",37.322,126.831],["화성",37.199,126.831],["평택",36.992,127.113],
+    ["의정부",37.738,127.034],["파주",37.760,126.780],["김포",37.615,126.716],["광명",37.479,126.865],
+    ["군포",37.361,126.935],["이천",37.272,127.435],["남양주",37.636,127.216],["하남",37.539,127.215],
+    ["오산",37.150,127.077],["시흥",37.380,126.803],["구리",37.594,127.130],["양주",37.785,127.046],
+    ["안성",37.008,127.280],["포천",37.895,127.200],["여주",37.298,127.637],
+
+    ["인천 중구",37.474,126.622],["인천 남동구",37.447,126.731],["인천 부평구",37.507,126.721],
+    ["인천 연수구",37.410,126.678],["인천 서구",37.545,126.676],["인천 계양구",37.537,126.738],
+    ["인천 미추홀구",37.464,126.650],
+
+    ["춘천",37.881,127.730],["강릉",37.752,128.876],["원주",37.342,127.920],["속초",38.207,128.591],
+    ["청주",36.642,127.489],["충주",36.991,127.926],["천안",36.815,127.114],["아산",36.790,127.002],
+    ["서산",36.785,126.450],["대전",36.350,127.385],["세종",36.480,127.289],
+
+    ["전주",35.824,127.148],["익산",35.948,126.958],["군산",35.968,126.737],
+    ["여수",34.760,127.662],["순천",34.951,127.487],["목포",34.812,126.392],["광주",35.160,126.853],
+
+    ["포항",36.019,129.343],["경주",35.856,129.225],["구미",36.120,128.344],["안동",36.568,128.730],
+    ["대구",35.871,128.601],["창원",35.228,128.681],["김해",35.229,128.890],["진주",35.180,128.108],
+    ["통영",34.854,128.433],["부산",35.180,129.075],["울산",35.538,129.311],
+
+    ["제주시",33.500,126.531],["서귀포",33.254,126.560]
+  ].map(function (a) { return { name: a[0], lat: a[1], lon: a[2] }; });
+
+  var DEFAULTS = [
+    { name: "성남 분당구", lat: 37.383, lon: 127.119 },
+    { name: "서울 강남구", lat: 37.518, lon: 127.047 }
+  ];
+
+  var KEY_LIST = "keunglssi-places";
+  var KEY_CUR  = "keunglssi-current";
+
+  function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function read(k) {
+    try { var s = localStorage.getItem(k); return s ? JSON.parse(s) : null; }
+    catch (e) { return null; }
+  }
+
+  var places  = read(KEY_LIST) || DEFAULTS.slice();
+  var current = read(KEY_CUR)  || { here: true };
+  var lastData = null;
+
+  /* ── 얼굴 ─────────────────────────────────────── */
+  var FACES = [
+    '<circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="38" cy="40" r="5" fill="currentColor"/><circle cx="62" cy="40" r="5" fill="currentColor"/><path d="M30 58 Q50 78 70 58" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
+    '<circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="38" cy="40" r="5" fill="currentColor"/><circle cx="62" cy="40" r="5" fill="currentColor"/><path d="M33 63 Q50 70 67 63" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
+    '<circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="38" cy="42" r="5" fill="currentColor"/><circle cx="62" cy="42" r="5" fill="currentColor"/><path d="M32 70 Q50 55 68 70" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
+    '<circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="6"/><path d="M30 34 L46 42" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="M70 34 L54 42" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="38" cy="48" r="4.5" fill="currentColor"/><circle cx="62" cy="48" r="4.5" fill="currentColor"/><path d="M32 74 Q50 56 68 74" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>'
+  ];
+
+  /* ── 날씨 그림 — 이모지, 흰 동그라미 안에 ────── */
+  var ICONS = {
+    sun:        "\u2600\uFE0F",
+    partly:     "\uD83C\uDF24\uFE0F",
+    cloud:      "\u2601\uFE0F",
+    rain:       "\uD83C\uDF27\uFE0F",
+    thunder:    "\u26C8\uFE0F",
+    snow:       "\u2744\uFE0F",
+    moon:       "\uD83C\uDF19",
+    partlyMoon: "\uD83C\uDF19"
+  };
+
+  function rank(code) {
+    if (code >= 95) return 5;
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 4;
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return 3;
+    if (code === 45 || code === 48) return 2;
+    if (code >= 2 && code <= 3) return 1;
+    return 0;
+  }
+
+  function iconFor(code, pop, hour) {
+    var r = rank(code);
+    if (r === 5) return ICONS.thunder;
+    if (r === 4) return ICONS.snow;
+    if (r >= 3)  return ICONS.rain;
+    if (pop != null && pop >= 60) return ICONS.rain;
+    if (r === 2 || code === 3) return ICONS.cloud;
+
+    var night = (hour != null) && (hour >= 19 || hour < 6);
+    if (code === 1 || code === 2) return night ? ICONS.partlyMoon : ICONS.partly;
+    return night ? ICONS.moon : ICONS.sun;
+  }
+
+  function wordFor(code) {
+    var r = rank(code);
+    if (r === 4) return "눈";
+    if (r >= 3) return "비";
+    return "";
+  }
+
+  /* ── 미세먼지 ─────────────────────────────────── */
+  function dustGrade(pm10, pm25) {
+    var a = 0, b = 0;
+    if (pm10 != null) a = pm10 <= 30 ? 0 : pm10 <= 80 ? 1 : pm10 <= 150 ? 2 : 3;
+    if (pm25 != null) b = pm25 <= 15 ? 0 : pm25 <= 35 ? 1 : pm25 <= 75 ? 2 : 3;
+    return Math.max(a, b);
+  }
+  var GRADE_NAME = ["좋음", "보통", "나쁨", "매우 나쁨"];
+  var GRADE_BG   = ["#1565C0", "#0B6B3A", "#F07800", "#C0392B"];
+
+  function decide(d) {
+    var g = dustGrade(d.pm10, d.pm25);
+    var todo = [], labels = [], state = "best", face = 0;
+
+    if (d.snow)      { todo.push("미끄러우니 조심하세요"); labels.push("눈"); }
+    else if (d.rain) { todo.push("우산 챙기세요");         labels.push("비"); }
+
+    if (g === 3)      { todo.unshift("오늘은 나가지 마세요"); labels.push("미세먼지 매우 나쁨"); }
+    else if (g === 2) { todo.unshift("마스크 꼭 쓰세요");     labels.push("미세먼지 나쁨"); }
+    else              { labels.push("미세먼지 " + GRADE_NAME[g]); }
+
+    if (d.temp != null && d.temp >= 33)      { todo.push("낮에는 나가지 마세요"); labels.push("더움"); }
+    else if (d.temp != null && d.temp <= -8) { todo.push("옷 두껍게 입으세요");   labels.push("추움"); }
+
+    if (g === 3 || (d.temp != null && d.temp >= 33))                         { state = "worst"; face = 3; }
+    else if (g === 2 || d.snow || d.rain || (d.temp != null && d.temp <= -8)) { state = "bad"; face = 2; }
+    else if (g === 1)                                                        { state = "good";  face = 1; }
+
+    if (!todo.length) todo.push("나가셔도 좋아요");
+
+    var action;
+    if (todo.length === 1) action = todo[0];
+    else if (d.rain && g === 2) action = "우산이랑 마스크 챙기세요";
+    else action = todo.slice(0, 2).join("\n");
+
+    return { state: state, face: face, action: action, label: labels.join(" · ") };
+  }
+
+  var BG = { best: "#1565C0", good: "#0B6B3A", bad: "#F07800",
+             worst: "#C0392B", neutral: "#1F2937" };
+
+  function setPlace(name) {
+    var el = $("place");
+    el.textContent = name;
+    if (name.length > 7) el.classList.add("long"); else el.classList.remove("long");
+  }
+
+  function paint(r, d) {
+    body.setAttribute("data-state", r.state);
+    $("face").innerHTML = FACES[r.face];
+    $("action").textContent = r.action;
+    $("sub").textContent = r.label + " · " + Math.round(d.temp) + "도";
+    $("hint").textContent = "화면을 누르면 자세히";
+    document.querySelector('meta[name="theme-color"]').setAttribute("content", BG[r.state]);
+  }
+
+  function showWaiting() {
+    body.setAttribute("data-state", "neutral");
+    $("face").innerHTML = FACES[1];
+    $("action").textContent = "날씨를 가져오는 중입니다";
+    $("sub").textContent = ""; $("hint").textContent = "";
+    $("todayRows").innerHTML = ""; $("weekRows").innerHTML = "";
+    lastData = null;
+  }
+
+  function showError(msg) {
+    body.setAttribute("data-state", "neutral");
+    $("face").innerHTML = FACES[2];
+    $("action").textContent = msg || "인터넷을 확인하고 다시 보기를 눌러 주세요";
+    $("sub").textContent = ""; $("hint").textContent = "";
+    lastData = null;
+  }
+
+  function drow(lbl, code, pop, note, tmp, hour) {
+    return '<div class="drow">' +
+             '<span class="lbl">' + lbl + '</span>' +
+             '<span class="ico" aria-hidden="true">' + iconFor(code, pop, hour) + '</span>' +
+             '<span class="note">' + note + '</span>' +
+             '<span class="tmp">' + tmp + '</span>' +
+           '</div>';
+  }
+
+  /* ── 오늘: 지금 시각부터 3시간 간격 ───────────── */
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+
+  function drawToday(H) {
+    var now = new Date();
+    var nowKey = now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" +
+                 pad(now.getDate()) + "T" + pad(now.getHours());
+    var todayDate = nowKey.slice(0, 10);
+
+    /* 3시간 눈금(0·3·6·9·12·15·18·21) 중 다음 것부터 */
+    var start = -1;
+    for (var i = 0; i < H.time.length; i++) {
+      if (H.time[i].slice(0, 13) <= nowKey) continue;
+      if (parseInt(H.time[i].slice(11, 13), 10) % 3 !== 0) continue;
+      start = i; break;
+    }
+    if (start < 0) { $("todayRows").innerHTML = '<div class="msg">예보가 없습니다</div>'; return; }
+
+    var html = "";
+    for (var k = 0; k < 6; k++) {
+      var idx = start + k * 3;
+      if (idx >= H.time.length) break;
+      var t = H.time[idx];
+      var hh = parseInt(t.slice(11, 13), 10);
+      var lbl = (t.slice(0, 10) === todayDate ? "" : "내일 ") + hh + "시";
+      var code = H.weather_code[idx];
+      var pop = H.precipitation_probability ? H.precipitation_probability[idx] : null;
+      var w = wordFor(code) || (pop >= 60 ? "비" : "");
+      var note = w ? (w + " " + (pop == null ? "" : pop + "%")) : "";
+      html += drow(lbl, code, pop, note, Math.round(H.temperature_2m[idx]) + "도", hh);
+    }
+    $("todayRows").innerHTML = html;
+  }
+
+  /* ── 이번 주: 7일 ─────────────────────────────── */
+  var DAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+  function drawWeek(D) {
+    var html = "";
+    var n = Math.min(7, D.time.length);
+    for (var i = 0; i < n; i++) {
+      var p = D.time[i].split("-");
+      var dt = new Date(+p[0], +p[1] - 1, +p[2]);
+      var name = (i === 0) ? "오늘" : (i === 1 ? "내일" : DAYS[dt.getDay()]);
+      var lbl = name + '<span class="date">' + (+p[1]) + "월 " + (+p[2]) + "일</span>";
+      var code = D.weather_code[i];
+      html += drow(lbl, code, null, wordFor(code),
+                   Math.round(D.temperature_2m_min[i]) + " → " +
+                   Math.round(D.temperature_2m_max[i]));
+    }
+    $("weekRows").innerHTML = html;
+  }
+
+  /* ── 자료 ─────────────────────────────────────── */
+  function fetchWeather(lat, lon, label) {
+    showWaiting();
+    setPlace(label);
+
+    var q = "latitude=" + lat + "&longitude=" + lon + "&timezone=Asia%2FSeoul";
+
+    var w = fetch("https://api.open-meteo.com/v1/forecast?" + q +
+        "&current=temperature_2m,relative_humidity_2m,precipitation,weather_code" +
+        "&hourly=temperature_2m,weather_code,precipitation_probability" +
+        "&daily=weather_code,temperature_2m_max,temperature_2m_min" +
+        "&forecast_days=8")
+      .then(function (r) { return r.json(); });
+
+    var a = fetch("https://air-quality-api.open-meteo.com/v1/air-quality?" + q +
+        "&current=pm10,pm2_5")
+      .then(function (r) { return r.json(); })
+      .catch(function () { return null; });
+
+    Promise.all([w, a]).then(function (res) {
+      var W = res[0], A = res[1];
+      if (!W || !W.current) throw new Error("no data");
+
+      var code = W.current.weather_code;
+      var precip = W.current.precipitation;
+
+      var d = {
+        temp: W.current.temperature_2m,
+        humid: W.current.relative_humidity_2m,
+        precip: precip,
+        rain: (precip > 0) || (code >= 51 && code <= 67) ||
+              (code >= 80 && code <= 82) || (code >= 95),
+        snow: (code >= 71 && code <= 77) || (code === 85) || (code === 86),
+        pm10: (A && A.current) ? A.current.pm10  : null,
+        pm25: (A && A.current) ? A.current.pm2_5 : null
+      };
+
+      lastData = d;
+
+      /* 지금 시각의 강수확률 찾아두기 */
+      if (W.hourly && W.hourly.precipitation_probability) {
+        var nw = new Date();
+        var key = nw.getFullYear() + "-" + pad(nw.getMonth() + 1) + "-" +
+                  pad(nw.getDate()) + "T" + pad(nw.getHours());
+        for (var j = 0; j < W.hourly.time.length; j++) {
+          if (W.hourly.time[j].slice(0, 13) === key) {
+            d.pop = W.hourly.precipitation_probability[j];
+            break;
+          }
+        }
+      }
+
+      paint(decide(d), d);
+      if (W.hourly) drawToday(W.hourly);
+      if (W.daily)  drawWeek(W.daily);
+    }).catch(function () { showError(); });
+  }
+
+  function load() {
+    window.scrollTo(0, 0);
+    var t = new Date();
+    $("todayDate").textContent =
+      (t.getMonth() + 1) + "월 " + t.getDate() + "일 " + DAYS[t.getDay()] + "요일";
+    if (current && current.here) loadHere(true);
+    else fetchWeather(current.lat, current.lon, current.name);
+  }
+
+  function pickName(j) {
+    if (!j) return "내 위치";
+    var admin = j.localityInfo && j.localityInfo.administrative;
+    if (admin && admin.length) {
+      var last = admin[admin.length - 1];
+      if (last && last.name) return last.name;
+    }
+    return j.locality || j.city || j.principalSubdivision || "내 위치";
+  }
+
+  function loadHere(silent) {
+    /* 실패하면 저장해 둔 지역으로 대신 보여준다 */
+    function fallback(msg) {
+      if (silent && places.length) {
+        fetchWeather(places[0].lat, places[0].lon, places[0].name);
+      } else {
+        showError(msg);
+      }
+    }
+
+    if (!navigator.geolocation) {
+      fallback("이 폰에서는 현재 위치를 쓸 수 없습니다");
+      return;
+    }
+    if (window.isSecureContext === false) {
+      fallback("인터넷 주소로 열어야 위치를 쓸 수 있습니다");
+      return;
+    }
+
+    showWaiting();
+    setPlace("위치 찾는 중");
+
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      var lat = pos.coords.latitude, lon = pos.coords.longitude;
+      fetch("https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=" +
+            lat + "&longitude=" + lon + "&localityLanguage=ko")
+        .then(function (r) { return r.json(); })
+        .then(pickName)
+        .catch(function () { return "내 위치"; })
+        .then(function (name) { fetchWeather(lat, lon, name); });
+
+    }, function (err) {
+      var msg = "위치를 알 수 없습니다. 지역을 골라 주세요";
+      if (err && err.code === 1) msg = "위치 사용을 허용해 주세요";
+      else if (err && err.code === 3) msg = "위치 찾기가 오래 걸립니다. 다시 눌러 주세요";
+      fallback(msg);
+    }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+  }
+
+  /* ── 자세히 ───────────────────────────────────── */
+  function badge(g) {
+    return '<span class="badge" style="background:' + GRADE_BG[g] +
+           ';color:' + (g === 2 ? "#1A1A1A" : "#fff") + '">' + GRADE_NAME[g] + '</span>';
+  }
+
+  function openDetail() {
+    if (!lastData) return;
+    var d = lastData;
+    var g10 = d.pm10 == null ? null : dustGrade(d.pm10, null);
+    var g25 = d.pm25 == null ? null : dustGrade(null, d.pm25);
+
+    var rows = [
+      ["기온", Math.round(d.temp) + "도"],
+      ["미세먼지",   d.pm10 == null ? "모름" : Math.round(d.pm10) + badge(g10)],
+      ["초미세먼지", d.pm25 == null ? "모름" : Math.round(d.pm25) + badge(g25)],
+      ["습도", d.humid == null ? "모름" : Math.round(d.humid) + "%"],
+      ["비", d.pop == null ? "모름" : "강수확률 " + d.pop + "%"]
+    ];
+
+    $("detailRows").innerHTML = rows.map(function (r) {
+      return '<div class="row"><span>' + r[0] + '</span><span class="val">' + r[1] + '</span></div>';
+    }).join("");
+
+    $("detail").setAttribute("data-state", body.getAttribute("data-state"));
+    $("detail").setAttribute("data-open", "true");
+  }
+
+  /* ── 지역 ─────────────────────────────────────── */
+  function drawSaved() {
+    var box = $("savedList");
+    box.innerHTML = "";
+    places.forEach(function (p, i) {
+      var wrap = document.createElement("div");
+      wrap.className = "item";
+
+      var pick = document.createElement("button");
+      pick.type = "button";
+      pick.textContent = p.name;
+      pick.addEventListener("click", function () {
+        current = p; save(KEY_CUR, p);
+        $("places").setAttribute("data-open", "false");
+        load();
+      });
+      wrap.appendChild(pick);
+
+      if (places.length > 1) {
+        var del = document.createElement("button");
+        del.type = "button"; del.className = "del";
+        del.setAttribute("aria-label", p.name + " 지우기");
+        del.textContent = "\u2715";
+        del.addEventListener("click", function () {
+          places.splice(i, 1); save(KEY_LIST, places); drawSaved();
+        });
+        wrap.appendChild(del);
+      }
+      box.appendChild(wrap);
+    });
+  }
+
+  function find() {
+    var q = $("findInput").value.trim();
+    $("findList").innerHTML = "";
+    if (!q) { $("findMsg").textContent = ""; return; }
+
+    var hits = KR.filter(function (p) {
+      return p.name.replace(/\s/g, "").indexOf(q.replace(/\s/g, "")) >= 0;
+    }).slice(0, 8);
+
+    if (!hits.length) {
+      $("findMsg").textContent = "못 찾았습니다. 시·군·구 이름으로 찾아보세요";
+      return;
+    }
+    $("findMsg").textContent = "";
+
+    hits.forEach(function (p) {
+      var wrap = document.createElement("div");
+      wrap.className = "item";
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = p.name;
+      b.addEventListener("click", function () {
+        var exists = places.some(function (x) { return x.name === p.name; });
+        if (!exists) { places.push(p); save(KEY_LIST, places); }
+        current = p; save(KEY_CUR, p);
+        $("findInput").value = "";
+        $("findList").innerHTML = ""; $("findMsg").textContent = "";
+        drawSaved();
+        $("places").setAttribute("data-open", "false");
+        load();
+      });
+      wrap.appendChild(b);
+      $("findList").appendChild(wrap);
+    });
+  }
+
+  /* ── 연결 ─────────────────────────────────────── */
+  $("middle").addEventListener("click", openDetail);
+  $("detailClose").addEventListener("click", function () {
+    $("detail").setAttribute("data-open", "false");
+  });
+
+  $("refresh").addEventListener("click", load);
+  $("change").addEventListener("click", function () {
+    drawSaved();
+    $("findList").innerHTML = ""; $("findMsg").textContent = "";
+    $("places").setAttribute("data-open", "true");
+    $("places").scrollTop = 0;
+  });
+  $("placesClose").addEventListener("click", function () {
+    $("places").setAttribute("data-open", "false");
+  });
+
+  $("godown").addEventListener("click", function () {
+    $("pane2").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  $("goweek").addEventListener("click", function () {
+    $("pane3").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  $("gotop").addEventListener("click", function () {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  $("useHere").addEventListener("click", function () {
+    current = { here: true }; save(KEY_CUR, current);
+    $("places").setAttribute("data-open", "false");
+    loadHere(false);
+  });
+
+  $("findBtn").addEventListener("click", find);
+  $("findInput").addEventListener("input", find);
+  $("findInput").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") find();
+  });
+
+  drawSaved();
+  load();
+})();
+</script>
+</body>
+</html>
