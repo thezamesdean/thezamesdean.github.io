@@ -25,7 +25,11 @@
      ─────────────────────────────────────────────── */
 
   *, *::before, *::after { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  html {
+    -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+  }
   html, body { margin: 0; }
 
   body {
@@ -35,7 +39,6 @@
     -webkit-tap-highlight-color: transparent;
     transition: background-color .35s ease;
     min-height: 100vh;
-    scroll-snap-type: y mandatory;
   }
   @media (prefers-reduced-motion: reduce) { body { transition: none; } }
 
@@ -50,6 +53,7 @@
     padding: 3.5vmin 5vmin 4vmin; text-align: center;
     min-height: 100vh;
     scroll-snap-align: start;
+    scroll-snap-stop: always;
   }
   @supports (height: 100dvh) { .pane { min-height: 100dvh; } }
 
