@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B6B3A">
+<title>큰글씨 날씨</title>
+<style>
+  /* ── 큰글씨 UI 규칙 ────────────────────────────────
+     1. 시스템 글씨 배율에 의존하지 않는다 (vmin 고정)
+     2. 한 화면에 정보 5개 이하
+     3. 세로 배치만, 가로 배치 금지
+     4. 말줄임표 금지 — 넘치면 줄바꿈
+     5. 버튼은 손가락 두 개 너비 이상
+     6. 수치 대신 판정과 행동
+     ─────────────────────────────────────────────── */
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    -webkit-text-size-adjust: 100%;   /* 시스템 글씨 확대 무시 */
+    text-size-adjust: 100%;
+  }
+
+  html, body { height: 100%; margin: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+                 "Noto Sans KR", "Malgun Gothic", sans-serif;
+    background: #111;
+    color: #fff;
+    overflow: hidden;
+    transition: background-color .35s ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body { transition: none; }
+  }
+
+  /* 판정 4단계 — 신호등 모델 */
+  body[data-state="good"]    { background: #0B6B3A; color: #fff; }
+  body[data-state="warn"]    { background: #F2B705; color: #1A1A1A; }
+  body[data-state="bad"]     { background: #C0392B; color: #fff; }
+  body[data-state="neutral"] { background: #1F2937; color: #fff; }
+
+  .screen {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: max(4vmin, env(safe-area-inset-top)) 5vmin
+             max(4vmin, env(safe-area-inset-bottom));
+    text-align: center;
+  }
+
+  /* ── 위: 지역 ── */
+  .place {
+    font-size: 6.5vmin;
+    font-weight: 700;
+    line-height: 1.3;
+    opacity: .9;
+    word-break: keep-all;
+  }
+
+  /* ── 가운데: 판정 + 행동 ── */
+  .middle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3vmin;
+    flex: 1;
+    width: 100%;
+  }
+
+  .verdict {
+    font-size: 26vmin;
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    word-break: keep-all;
+  }
+
+  .action {
+    font-size: 9vmin;
+    font-weight: 700;
+    line-height: 1.4;
+    word-break: keep-all;
+    max-width: 92%;
+  }
+
+  /* ── 아래: 기온 + 버튼 ── */
+  .bottom { width: 100%; }
+
+  .temp {
+    font-size: 8vmin;
+    font-weight: 700;
+    margin-bottom: 3vmin;
+    opacity: .92;
+  }
+
+  .buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5vmin;
+    width: 100%;
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 6.5vmin;
+    font-weight: 700;
+    color: inherit;
+    background: rgba(255,255,255,.16);
+    border: 0.6vmin solid currentColor;
+    border-radius: 3vmin;
+    padding: 3.5vmin 3vmin;
+    min-height: 88px;          /* 손가락 두 개 너비 */
+    width: 100%;
+    cursor: pointer;
+    word-break: keep-all;
+  }
+
+  body[data-state="warn"] button { background: rgba(0,0,0,.10); }
+
+  button:active { transform: scale(.98); }
+
+  button:focus-visible {
+    outline: 1vmin solid currentColor;
+    outline-offset: 0.8vmin;
+  }
+
+  /* ── 지역 고르기 화면 ── */
+  .picker {
+    position: fixed;
+    inset: 0;
+    background: #111;
+    color: #fff;
+    padding: 5vmin;
+    overflow-y: auto;
+    display: none;
+  }
+
+  .picker[data-open="true"] { display: block; }
+
+  .picker h2 {
+    font-size: 8vmin;
+    font-weight: 800;
+    margin: 2vmin 0 5vmin;
+    text-align: center;
+  }
+
+  .picker-list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5vmin;
+  }
+
+  .picker button { background: rgba(255,255,255,.12); }
+
+  /* 화면이 아주 낮을 때(가로 모드) 판정 글씨 축소 */
+  @media (max-height: 420px) {
+    .verdict { font-size: 18vmin; }
+    .action  { font-size: 6vmin; }
+  }
+</style>
+</head>
+<body data-state="neutral">
+
+  <main class="screen">
+    <div class="place" id="place">성남</div>
+
+    <div class="middle">
+      <div class="verdict" id="verdict">잠깐만요</div>
+      <div class="action" id="action">날씨를 가져오는 중입니다</div>
+    </div>
+
+    <div class="bottom">
+      <div class="temp" id="temp"></div>
+      <div class="buttons">
+        <button id="refresh" type="button">다시 보기</button>
+        <button id="change" type="button">지역 바꾸기</button>
+      </div>
+    </div>
+  </main>
+
+  <section class="picker" id="picker" data-open="false" aria-label="지역 고르기">
+    <h2>어디 사세요?</h2>
+    <div class="picker-list" id="pickerList"></div>
+  </section>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── 지역 목록 ───────────────────────────────── */
+  var PLACES = [
+    { name: "서울",   lat: 37.5665, lon: 126.9780 },
+    { name: "성남",   lat: 37.4200, lon: 127.1265 },
+    { name: "수원",   lat: 37.2636, lon: 127.0286 },
+    { name: "인천",   lat: 37.4563, lon: 126.7052 },
+    { name: "고양",   lat: 37.6584, lon: 126.8320 },
+    { name: "용인",   lat: 37.2411, lon: 127.1776 },
+    { name: "의정부", lat: 37.7381, lon: 127.0338 },
+    { name: "춘천",   lat: 37.8813, lon: 127.7300 },
+    { name: "강릉",   lat: 37.7519, lon: 128.8761 },
+    { name: "대전",   lat: 36.3504, lon: 127.3845 },
+    { name: "천안",   lat: 36.8151, lon: 127.1139 },
+    { name: "청주",   lat: 36.6424, lon: 127.4890 },
+    { name: "전주",   lat: 35.8242, lon: 127.1480 },
+    { name: "광주",   lat: 35.1595, lon: 126.8526 },
+    { name: "목포",   lat: 34.8118, lon: 126.3922 },
+    { name: "대구",   lat: 35.8714, lon: 128.6014 },
+    { name: "포항",   lat: 36.0190, lon: 129.3435 },
+    { name: "부산",   lat: 35.1796, lon: 129.0756 },
+    { name: "울산",   lat: 35.5384, lon: 129.3114 },
+    { name: "창원",   lat: 35.2280, lon: 128.6811 },
+    { name: "제주",   lat: 33.4996, lon: 126.5312 }
+  ];
+
+  /* 처음 켰을 때 지역. 배포 후에는 이 값을 한 번만 저장하면 다시 안 물어봅니다. */
+  var current = PLACES[1];   // 성남
+
+  var $ = function (id) { return document.getElementById(id); };
+  var body = document.body;
+
+  /* ── 미세먼지 등급 (환경부 기준) ──────────────── */
+  function dustGrade(pm10, pm25) {
+    var a = 0, b = 0;
+    if (pm10 != null) {
+      a = pm10 <= 30 ? 0 : pm10 <= 80 ? 1 : pm10 <= 150 ? 2 : 3;
+    }
+    if (pm25 != null) {
+      b = pm25 <= 15 ? 0 : pm25 <= 35 ? 1 : pm25 <= 75 ? 2 : 3;
+    }
+    return Math.max(a, b);   // 둘 중 나쁜 쪽
+  }
+
+  /* ── 판정 한 개만 고른다 (위험한 것 우선) ─────── */
+  function decide(d) {
+    var g = dustGrade(d.pm10, d.pm25);
+
+    if (g === 3) {
+      return { state: "bad", verdict: "매우 나쁨", action: "오늘은 나가지 마세요" };
+    }
+    if (g === 2) {
+      return { state: "bad", verdict: "나쁨", action: "마스크 꼭 쓰세요" };
+    }
+    if (d.snow) {
+      return { state: "warn", verdict: "눈", action: "미끄러우니 조심하세요" };
+    }
+    if (d.rain) {
+      return { state: "warn", verdict: "비", action: "우산 챙기세요" };
+    }
+    if (d.temp != null && d.temp >= 33) {
+      return { state: "bad", verdict: "더움", action: "낮에는 나가지 마세요" };
+    }
+    if (d.temp != null && d.temp <= -8) {
+      return { state: "warn", verdict: "추움", action: "옷 두껍게 입으세요" };
+    }
+    if (g === 1) {
+      return { state: "good", verdict: "보통", action: "나가셔도 괜찮아요" };
+    }
+    return { state: "good", verdict: "좋음", action: "나가셔도 좋아요" };
+  }
+
+  /* ── 화면 그리기 ─────────────────────────────── */
+  function paint(r, temp) {
+    body.setAttribute("data-state", r.state);
+    $("verdict").textContent = r.verdict;
+    $("action").textContent = r.action;
+    $("temp").textContent = (temp == null) ? "" : Math.round(temp) + "도";
+    var bg = { good: "#0B6B3A", warn: "#F2B705", bad: "#C0392B", neutral: "#1F2937" };
+    document.querySelector('meta[name="theme-color"]').setAttribute("content", bg[r.state]);
+  }
+
+  function showWaiting() {
+    body.setAttribute("data-state", "neutral");
+    $("verdict").textContent = "잠깐만요";
+    $("action").textContent = "날씨를 가져오는 중입니다";
+    $("temp").textContent = "";
+  }
+
+  function showError() {
+    body.setAttribute("data-state", "neutral");
+    $("verdict").textContent = "안 됩니다";
+    $("action").textContent = "인터넷을 확인하고 다시 보기를 눌러 주세요";
+    $("temp").textContent = "";
+  }
+
+  /* ── 자료 가져오기 (열쇠 없이 쓰는 무료 자료) ── */
+  function load() {
+    showWaiting();
+    $("place").textContent = current.name;
+
+    var q = "latitude=" + current.lat + "&longitude=" + current.lon +
+            "&timezone=Asia%2FSeoul";
+
+    var weather = fetch("https://api.open-meteo.com/v1/forecast?" + q +
+                        "&current=temperature_2m,precipitation,weather_code")
+                    .then(function (r) { return r.json(); });
+
+    var air = fetch("https://air-quality-api.open-meteo.com/v1/air-quality?" + q +
+                    "&current=pm10,pm2_5")
+                .then(function (r) { return r.json(); })
+                .catch(function () { return null; });   // 먼지 자료는 없어도 진행
+
+    Promise.all([weather, air]).then(function (res) {
+      var w = res[0], a = res[1];
+      if (!w || !w.current) { throw new Error("no data"); }
+
+      var code = w.current.weather_code;
+      var precip = w.current.precipitation;
+
+      var data = {
+        temp: w.current.temperature_2m,
+        rain: (precip > 0) || (code >= 51 && code <= 67) || (code >= 80 && code <= 82),
+        snow: (code >= 71 && code <= 77) || (code >= 85 && code <= 86),
+        pm10: (a && a.current) ? a.current.pm10  : null,
+        pm25: (a && a.current) ? a.current.pm2_5 : null
+      };
+
+      paint(decide(data), data.temp);
+    }).catch(showError);
+  }
+
+  /* ── 지역 고르기 ─────────────────────────────── */
+  function buildPicker() {
+    var list = $("pickerList");
+    PLACES.forEach(function (p) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = p.name;
+      b.addEventListener("click", function () {
+        current = p;
+        $("picker").setAttribute("data-open", "false");
+        load();
+      });
+      list.appendChild(b);
+    });
+  }
+
+  $("refresh").addEventListener("click", load);
+  $("change").addEventListener("click", function () {
+    $("picker").setAttribute("data-open", "true");
+    $("picker").scrollTop = 0;
+  });
+
+  buildPicker();
+  load();
+})();
+</script>
+</body>
+</html>
