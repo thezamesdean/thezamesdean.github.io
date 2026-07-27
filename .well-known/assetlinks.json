@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.thezamesdean.weather",
+        "sha256_cert_fingerprints": ["AF:F8:18:F5:B5:92:A4:B6:29:E6:B2:E3:A6:A8:C4:3C:92:67:74:3E:57:D0:14:7C:9E:D6:DF:65:54:D8:24:E5"]
+      }
+    }]
