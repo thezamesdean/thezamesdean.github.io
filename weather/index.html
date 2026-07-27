@@ -65,8 +65,8 @@
   @supports (height: 100dvh) { #pane1 { min-height: 100dvh; } }
   #pane3 { padding-bottom: max(8vmin, env(safe-area-inset-bottom)); }
 
-  .place { font-size: 7.5vmin; font-weight: 800; line-height: 1.25; word-break: keep-all; }
-  .place.long { font-size: 5.8vmin; }
+  .place { font-size: 10vmin; font-weight: 800; line-height: 1.2; word-break: keep-all; }
+  .place.long { font-size: 7.4vmin; }
   .today { font-size: 4.8vmin; font-weight: 700; opacity: .8; margin-top: 1vmin; }
 
   .middle {
@@ -105,11 +105,12 @@
 
   #pane2 .down, #pane3 .down { margin-top: 3vmin; }
 
-  .pane h3 { font-size: 7.5vmin; font-weight: 800; margin: 0 0 2vmin; }
+  .pane h3 { font-size: 8.6vmin; font-weight: 800; margin: 0 0 2vmin; }
+  .pane h3 .hdate { font-size: 5vmin; font-weight: 700; opacity: .8; margin-left: 2.5vmin; white-space: nowrap; }
   .rowbox { width: 100%; flex: 1; display: flex; flex-direction: column; }
 
   .drow {
-    display: flex; align-items: center; gap: 2vmin;
+    display: flex; align-items: center; gap: 1.6vmin;
     padding: 2.2vmin 0;
     border-bottom: .35vmin solid rgba(255,255,255,.3);
     flex: 1 1 0; min-height: 64px;
@@ -118,29 +119,29 @@
   .drow:last-child { border-bottom: 0; }
 
   .drow .lbl  {
-    flex: 0 0 25vmin; text-align: left;
-    font-size: 5.4vmin; font-weight: 800;
+    flex: 0 0 30vmin; text-align: left;
+    font-size: 6.2vmin; font-weight: 800;
     white-space: nowrap;
     display: flex; flex-direction: column;
     align-items: flex-start; justify-content: center;
     line-height: 1.15;
   }
-  .drow .lbl .date { font-size: 3.7vmin; font-weight: 700; opacity: .8; }
+  .drow .lbl .date { font-size: 4.1vmin; font-weight: 700; opacity: .8; }
 
   .drow .ico  {
-    flex: 0 0 11vmin; width: 11vmin; height: 11vmin;
+    flex: 0 0 10vmin; width: 10vmin; height: 10vmin;
     display: flex; align-items: center; justify-content: center;
-    font-size: 7.4vmin; line-height: 1;
+    font-size: 7.6vmin; line-height: 1;
     filter: drop-shadow(0 .3vmin .6vmin rgba(0,0,0,.4));
   }
 
   .drow .dust {
-    flex: 0 0 9.5vmin; width: 9.5vmin; height: 9.5vmin;
+    flex: 0 0 9vmin; width: 9vmin; height: 9vmin;
     filter: drop-shadow(0 .2vmin .5vmin rgba(0,0,0,.35));
   }
 
-  .drow .note { flex: 1; min-width: 0; text-align: left; font-size: 4.1vmin; font-weight: 700; opacity: .9; white-space: nowrap; }
-  .drow .tmp  { flex: 0 0 auto; text-align: right; font-size: 5.6vmin; font-weight: 800; white-space: nowrap; }
+  .drow .note { flex: 1; min-width: 0; overflow: hidden; text-align: left; font-size: 4.6vmin; font-weight: 700; opacity: .9; white-space: nowrap; }
+  .drow .tmp  { flex: 0 0 auto; text-align: right; font-size: 5.9vmin; font-weight: 800; white-space: nowrap; }
 
   .sheet {
     position: fixed; inset: 0; background: #111; color: #fff;
@@ -218,7 +219,7 @@
 </section>
 
 <section class="pane" id="pane2">
-  <h3>오늘</h3>
+  <h3>오늘<span class="hdate" id="p2date"></span></h3>
   <div class="rowbox" id="todayRows"></div>
   <button class="down" id="goweek" type="button">
     <span class="arrow">▼</span>이번 주
@@ -322,10 +323,10 @@
 
   /* ── 얼굴 ─────────────────────────────────────── */
   var FACES = [
-    '<circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="38" cy="40" r="5" fill="currentColor"/><circle cx="62" cy="40" r="5" fill="currentColor"/><path d="M30 58 Q50 78 70 58" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
+    '<circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="38" cy="40" r="5" fill="currentColor"/><circle cx="62" cy="40" r="5" fill="currentColor"/><path d="M30 58 Q50 78 70 58" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><g transform="translate(70,2) scale(0.20)"><path d="M50 88 C50 88 10 60 10 35 C10 20 22 12 32 12 C40 12 46 16 50 22 C54 16 60 12 68 12 C78 12 90 20 90 35 C90 60 50 88 50 88 Z" fill="currentColor"/></g>',
     '<circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="38" cy="40" r="5" fill="currentColor"/><circle cx="62" cy="40" r="5" fill="currentColor"/><path d="M33 63 Q50 70 67 63" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
     '<circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="38" cy="42" r="5" fill="currentColor"/><circle cx="62" cy="42" r="5" fill="currentColor"/><path d="M32 70 Q50 55 68 70" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>',
-    '<circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="6"/><path d="M30 34 L46 42" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="M70 34 L54 42" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="38" cy="48" r="4.5" fill="currentColor"/><circle cx="62" cy="48" r="4.5" fill="currentColor"/><path d="M32 74 Q50 56 68 74" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>'
+    '<path d="M23 23 L16 3 L35 15 Z" fill="currentColor"/><path d="M77 23 L84 3 L65 15 Z" fill="currentColor"/><circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="6"/><path d="M30 34 L46 42" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="M70 34 L54 42" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="38" cy="48" r="4.5" fill="currentColor"/><circle cx="62" cy="48" r="4.5" fill="currentColor"/><path d="M32 74 Q50 56 68 74" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>'
   ];
 
   /* ── 날씨 그림 — 이모지, 흰 동그라미 안에 ────── */
@@ -467,6 +468,13 @@
            '</div>';
   }
 
+  /* 오전 3시 / 오후 12시 형식 */
+  function hourLabel(hh) {
+    var ap = hh < 12 ? "오전" : "오후";
+    var h = hh % 12; if (h === 0) h = 12;
+    return ap + " " + h + "시";
+  }
+
   /* ── 오늘: 지금 시각부터 3시간 간격 ───────────── */
   function pad(n) { return (n < 10 ? "0" : "") + n; }
 
@@ -490,7 +498,8 @@
       if (idx >= H.time.length) break;
       var t = H.time[idx];
       var hh = parseInt(t.slice(11, 13), 10);
-      var lbl = (t.slice(0, 10) === todayDate ? "" : "내일 ") + hh + "시";
+      var lbl = hourLabel(hh) +
+                (t.slice(0, 10) === todayDate ? "" : '<span class="date">내일</span>');
       var code = H.weather_code[idx];
       var pop = H.precipitation_probability ? H.precipitation_probability[idx] : null;
       var w = wordFor(code) || (pop >= 60 ? "비" : "");
@@ -595,6 +604,8 @@
     window.scrollTo(0, 0);
     var t = new Date();
     $("todayDate").textContent =
+      (t.getMonth() + 1) + "월 " + t.getDate() + "일 " + DAYS[t.getDay()] + "요일";
+    $("p2date").textContent =
       (t.getMonth() + 1) + "월 " + t.getDate() + "일 " + DAYS[t.getDay()] + "요일";
     if (current && current.here) loadHere(true);
     else fetchWeather(current.lat, current.lon, current.name);
