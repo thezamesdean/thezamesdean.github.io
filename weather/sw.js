@@ -1,14 +1,14 @@
 /* 큰글씨 날씨 — 서비스워커
-   앱 껍데기는 캐시에 두고, 날씨 자료는 항상 새로 받는다. */
-
-var CACHE = "keunglssi-weather-v1";
+   앱 껍데기는 캐시에 두고, 날씨 자료는 항상 새로 받는다.
+   파일을 바꿀 때마다 CACHE 뒤 번호를 올린다 (v2 → v3 → ...). */
+var CACHE = "keunglssi-weather-v2";
 var SHELL = [
   "./",
   "./index.html",
   "./manifest.json",
-  "./icon-192.png",
-  "./icon-512.png",
-  "./icon-maskable-512.png"
+  "./icon-192.png?v=2",
+  "./icon-512.png?v=2",
+  "./icon-maskable-512.png?v=2"
 ];
 
 self.addEventListener("install", function (e) {
@@ -33,7 +33,6 @@ self.addEventListener("activate", function (e) {
 self.addEventListener("fetch", function (e) {
   var req = e.request;
   if (req.method !== "GET") return;
-
   var url = new URL(req.url);
 
   /* 날씨·미세먼지·위치 자료는 캐시하지 않는다 */
