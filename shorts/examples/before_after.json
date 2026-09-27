@@ -1,0 +1,9 @@
+{
+  "type": "before_after",
+  "hook": ["3개월 동안 매일 스쿼트 100개", "했더니 생긴 일 ㄷㄷ"],
+  "before": { "image": "before.jpg", "label": "BEFORE", "caption": "78kg" },
+  "after":  { "image": "after.jpg",  "label": "3개월 후", "caption": "62kg" },
+  "bottom": "-16kg 성공!",
+  "timing": { "before": 3.5, "transition": 0.6, "after": 4.0, "split": 3.0 },
+  "music": null
+}

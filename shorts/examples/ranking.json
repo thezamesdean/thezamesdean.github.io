@@ -1,0 +1,14 @@
+{
+  "type": "ranking",
+  "title": ["세계에서 가장 비싼 과일", "TOP 5"],
+  "items": [
+    { "rank": 5, "name": "센비키야 멜론",   "desc": "1통 약 30만원",   "image": "rank5.jpg" },
+    { "rank": 4, "name": "루비로망 포도",   "desc": "1송이 약 1,200만원", "image": "rank4.jpg" },
+    { "rank": 3, "name": "태양의 달걀 망고", "desc": "2개 약 400만원",  "image": "rank3.jpg" },
+    { "rank": 2, "name": "덴스케 수박",     "desc": "1통 약 700만원",  "image": "rank2.jpg" },
+    { "rank": 1, "name": "유바리 킹 멜론",   "desc": "2통 약 5,000만원", "image": "rank1.jpg" }
+  ],
+  "per_item": 2.6,
+  "outro_text": "1위 예상했으면 댓글 ㄱㄱ",
+  "music": null
+}
