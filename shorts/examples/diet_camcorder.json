@@ -1,10 +1,28 @@
 {
   "type": "before_after",
   "look": "camcorder",
-  "hook": ["야식 끊고 매일 줄넘기 1000개", "3개월 한 아빠의 최후"],
-  "before": { "image": "diet_before.jpg", "label": "BEFORE", "caption": "102kg", "date": "2025.06.03" },
-  "after":  { "image": "diet_after.jpg",  "label": "3개월 후", "caption": "81kg", "date": "2025.09.05" },
+  "hook": [
+    "야식 끊고 매일 줄넘기 1000개",
+    "3개월 한 아빠의 최후"
+  ],
+  "before": {
+    "image": "diet_before.jpg",
+    "label": "BEFORE",
+    "caption": "102kg",
+    "date": "2025.06.03"
+  },
+  "after": {
+    "image": "diet_after.jpg",
+    "label": "3개월 후",
+    "caption": "81kg",
+    "date": "2025.09.05"
+  },
   "bottom": "-21kg ㄷㄷ",
-  "timing": { "before": 3.5, "transition": 0.6, "after": 4.0, "split": 3.0 },
+  "timing": {
+    "before": 3.0,
+    "transition": 0.5,
+    "after": 3.5,
+    "split": 2.5
+  },
   "music": null
 }
