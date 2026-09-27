@@ -1,0 +1,15 @@
+{
+  "type": "ranking",
+  "look": "camcorder",
+  "title": ["딸 남자친구 처음 본", "아빠 표정 랭킹 TOP5"],
+  "items": [
+    { "rank": 5, "name": "억지 미소 장인",     "desc": "웃는데 눈이 안 웃음",   "image": "rank_dad5.jpg", "date": "2024.12.24" },
+    { "rank": 4, "name": "팔짱 스캔 모드",     "desc": "위아래로 3번 훑음",     "image": "rank_dad4.jpg", "date": "2025.02.09" },
+    { "rank": 3, "name": "과일 깎다 멈춤",     "desc": "칼 든 채로 정지",       "image": "rank_dad3.jpg", "date": "2025.05.05" },
+    { "rank": 2, "name": "현실 부정",          "desc": "\"...누구라고?\"",       "image": "rank_dad2.jpg", "date": "2025.08.15" },
+    { "rank": 1, "name": "영혼 가출",          "desc": "딸 결혼 발표 직후",      "image": "rank_dad1.jpg", "date": "2025.09.20" }
+  ],
+  "per_item": 2.6,
+  "outro_text": "우리 아빠는 몇 위? 댓글 ㄱㄱ",
+  "music": null
+}

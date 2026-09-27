@@ -30,6 +30,7 @@ FPS = 30
 SR = 44100
 HERE = os.path.dirname(os.path.abspath(__file__))
 FONT = os.path.join(HERE, "fonts", "BlackHanSans-Regular.ttf")
+MONO = os.path.join(HERE, "fonts", "DejaVuSansMono-Bold.ttf")
 
 YELLOW = (255, 221, 0)
 WHITE = (255, 255, 255)
@@ -100,9 +101,12 @@ def paste_scaled(canvas, layer, cx, cy, scale=1.0, alpha=1.0):
 
 
 class Media:
-    """이미지를 영역 크기에 맞게 꽉 채우고(cover) 천천히 줌인한다."""
+    """이미지를 영역 크기에 맞게 꽉 채우고(cover) 천천히 줌인한다.
 
-    def __init__(self, path, w, h, max_zoom=1.12, placeholder=None):
+    look="camcorder"면 저화질 캠코더 느낌(뭉개진 해상도, 색번짐, 노이즈, REC·날짜 표시)을 입힌다.
+    """
+
+    def __init__(self, path, w, h, max_zoom=1.12, placeholder=None, look=None, stamp=None):
         self.w, self.h = w, h
         if path and os.path.exists(path):
             src = Image.open(path).convert("RGB")
@@ -112,18 +116,73 @@ class Media:
         tw, th = int(w * max_zoom), int(h * max_zoom)
         s = max(tw / src.width, th / src.height)
         src = src.resize((math.ceil(src.width * s), math.ceil(src.height * s)), Image.LANCZOS)
+        self.look, self.stamp = look, stamp
+        if look == "camcorder":
+            src = camcorder_degrade(src)
+            rng = np.random.default_rng(7)
+            self.grain = [rng.normal(0, 9, (h // 2, w // 2, 1)).repeat(2, 0).repeat(2, 1)
+                          for _ in range(6)]
+            self.stamp_font = ImageFont.truetype(MONO, max(34, int(w * 0.042)))
         self.src = src
         self.max_zoom = max_zoom
 
-    def frame(self, zoom=1.0):
+    def frame(self, zoom=1.0, t=0.0):
         zoom = max(1.0, min(self.max_zoom, zoom))
         # zoom=1이면 영역 전체, max_zoom이면 원본 1:1 크기로 가운데를 잘라낸다
         cw = min(self.w * self.max_zoom / zoom, self.src.width)
         ch = min(self.h * self.max_zoom / zoom, self.src.height)
         x0 = (self.src.width - cw) / 2
         y0 = (self.src.height - ch) / 2
-        return self.src.resize((self.w, self.h), Image.BILINEAR,
-                               box=(x0, y0, x0 + cw, y0 + ch)).convert("RGBA")
+        if self.look == "camcorder":  # 손떨림
+            fi = int(t * FPS)
+            x0 = max(0, min(self.src.width - cw, x0 + 3 * math.sin(fi * 1.7) + 2 * math.sin(fi * 0.63)))
+            y0 = max(0, min(self.src.height - ch, y0 + 3 * math.cos(fi * 1.3)))
+        img = self.src.resize((self.w, self.h), Image.BILINEAR, box=(x0, y0, x0 + cw, y0 + ch))
+        if self.look == "camcorder":
+            img = self._camcorder_frame(img, t)
+        return img.convert("RGBA")
+
+    def _camcorder_frame(self, img, t):
+        g = self.grain[int(t * FPS) % len(self.grain)][:self.h, :self.w]
+        arr = np.asarray(img, dtype=np.int16) + g.astype(np.int16)
+        img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+        d = ImageDraw.Draw(img)
+        f = self.stamp_font
+        m = int(self.w * 0.05)
+        if int(t * 2) % 2 == 0:  # REC 깜빡임
+            r = f.size // 2
+            d.ellipse([self.w - m - f.getlength("REC") - r * 2 - 10, m + 4,
+                       self.w - m - f.getlength("REC") - 10, m + 4 + r * 2], fill=(230, 30, 30))
+        d.text((self.w - m, m), "REC", font=f, fill=WHITE, anchor="ra", stroke_width=2, stroke_fill=BLACK)
+        if self.stamp:
+            sec = int(t)
+            d.text((m, self.h - m), self.stamp, font=f, fill=WHITE, anchor="ld",
+                   stroke_width=2, stroke_fill=BLACK)
+            d.text((m, self.h - m - f.size - 10), f"0:00:{sec:02d}", font=f, fill=WHITE, anchor="ld",
+                   stroke_width=2, stroke_fill=BLACK)
+        return img
+
+
+def camcorder_degrade(src):
+    """캠코더/구형 폰 화질: 해상도 뭉개기 + JPEG 깨짐 + 색감 + 색번짐 + 비네팅."""
+    import io
+    w, h = src.size
+    small = src.resize((max(1, w // 3), max(1, h // 3)), Image.BILINEAR)
+    buf = io.BytesIO()
+    small.save(buf, "JPEG", quality=35)
+    small = Image.open(buf).convert("RGB")
+    img = small.resize((w, h), Image.BILINEAR)
+    a = np.asarray(img, dtype=np.float32)
+    gray = a.mean(axis=2, keepdims=True)
+    a = gray + (a - gray) * 0.82                 # 채도 살짝 빼기
+    a = a * 0.9 + 14                              # 검은색 뜨게 (저가형 센서 느낌)
+    a *= np.array([1.04, 1.0, 0.9])               # 누런 색감
+    a[..., 0] = np.roll(a[..., 0], 3, axis=1)     # 색번짐
+    a[..., 2] = np.roll(a[..., 2], -3, axis=1)
+    yy, xx = np.mgrid[0:h, 0:w]
+    v = ((xx - w / 2) / (w / 2)) ** 2 + ((yy - h / 2) / (h / 2)) ** 2
+    a *= (1 - 0.28 * np.clip(v, 0, 1.4))[..., None]
+    return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
 
 
 def make_placeholder(label, w, h):
@@ -242,10 +301,11 @@ def before_after(cfg, base):
     mh = H - top
     b, a = cfg["before"], cfg["after"]
     rp = lambda p: os.path.join(base, p) if p else None
-    mb = Media(rp(b.get("image")), W, mh, placeholder="BEFORE 사진")
-    ma = Media(rp(a.get("image")), W, mh, placeholder="AFTER 사진")
-    sb = Media(rp(b.get("image")), W // 2, mh, placeholder="BEFORE")
-    sa = Media(rp(a.get("image")), W // 2, mh, placeholder="AFTER")
+    look = cfg.get("look")
+    mb = Media(rp(b.get("image")), W, mh, placeholder="BEFORE 사진", look=look, stamp=b.get("date"))
+    ma = Media(rp(a.get("image")), W, mh, placeholder="AFTER 사진", look=look, stamp=a.get("date"))
+    sb = Media(rp(b.get("image")), W // 2, mh, placeholder="BEFORE", look=look, stamp=b.get("date"))
+    sa = Media(rp(a.get("image")), W // 2, mh, placeholder="AFTER", look=look, stamp=a.get("date"))
 
     bar = title_bar(cfg.get("hook", []), top)
     pill_b = pill_layer(b.get("label", "BEFORE"), 64, RED)
@@ -266,20 +326,20 @@ def before_after(cfg, base):
     def frame(t):
         c = Image.new("RGBA", (W, H), BLACK + (255,))
         if t < s1:
-            c.alpha_composite(mb.frame(1 + 0.06 * t / s1), (0, top))
+            c.alpha_composite(mb.frame(1 + 0.06 * t / s1, t), (0, top))
             paste_scaled(c, pill_b, 60 + pill_b.width / 2, top + 90, ease_back(t / 0.35))
             if cap_b:
                 paste_scaled(c, cap_b, W / 2, cap_y, ease_back((t - 0.3) / 0.35))
         elif t < s2:
             p = ease_out((t - s1) / t_trans)
-            c.alpha_composite(mb.frame(1.06), (0, top))
+            c.alpha_composite(mb.frame(1.06, t), (0, top))
             x = int(W * p)
             if x > 0:
-                c.alpha_composite(ma.frame(1.0).crop((0, 0, x, mh)), (0, top))
+                c.alpha_composite(ma.frame(1.0, t).crop((0, 0, x, mh)), (0, top))
             ImageDraw.Draw(c).rectangle([x - 8, top, x + 8, H], fill=WHITE)
         elif t < s3 or t_split <= 0:
             lt = t - s2
-            c.alpha_composite(ma.frame(1 + 0.06 * lt / t_after), (0, top))
+            c.alpha_composite(ma.frame(1 + 0.06 * lt / t_after, t), (0, top))
             flash = max(0.0, 1 - lt / 0.25)
             if flash > 0:
                 c.alpha_composite(Image.new("RGBA", (W, mh), (255, 255, 255, int(200 * flash))), (0, top))
@@ -290,8 +350,8 @@ def before_after(cfg, base):
             lt = t - s3
             p = ease_out(lt / 0.45)
             off = int((1 - p) * W / 2)
-            c.alpha_composite(sb.frame(1.0), (-off, top))
-            c.alpha_composite(sa.frame(1.0), (W // 2 + off, top))
+            c.alpha_composite(sb.frame(1.0, t), (-off, top))
+            c.alpha_composite(sa.frame(1.0, t), (W // 2 + off, top))
             ImageDraw.Draw(c).rectangle([W // 2 - 5, top, W // 2 + 4, H], fill=WHITE)
             paste_scaled(c, small_b, W / 4 - off, top + 80)
             paste_scaled(c, small_a, W * 3 / 4 + off, top + 80)
@@ -332,7 +392,8 @@ def ranking(cfg, base):
     top = 360
     mh = H - top
     rp = lambda p: os.path.join(base, p) if p else None
-    medias = [Media(rp(it.get("image")), W, mh, placeholder=f"{it['rank']}위 사진") for it in items]
+    medias = [Media(rp(it.get("image")), W, mh, placeholder=f"{it['rank']}위 사진",
+                    look=cfg.get("look"), stamp=it.get("date")) for it in items]
     bar = title_bar(cfg.get("title", []), top)
 
     # 순위 목록 (1위가 맨 위)
@@ -346,6 +407,11 @@ def ranking(cfg, base):
     name_hl = {r: text_layer(by_rank[r]["name"], fs, YELLOW, 6, max_w=W - 220) for r in ranks}
     big_rank = {r: text_layer(f"{r}위", 260, YELLOW if r != 1 else (255, 90, 60), 14) for r in ranks}
     descs = {r: text_layer(by_rank[r]["desc"], 64, WHITE, 6) for r in ranks if by_rank[r].get("desc")}
+    # 목록 가독성을 위한 위쪽 그림자 (아래로 갈수록 투명)
+    shade_h = int(row_h * n + 220)
+    alpha = (np.clip(1 - np.linspace(0, 1, shade_h) ** 2, 0, 1) * 120).astype(np.uint8)
+    list_shade = Image.new("RGBA", (W, shade_h), BLACK + (0,))
+    list_shade.putalpha(Image.fromarray(np.repeat(alpha[:, None], W, axis=1)))
     outro_txt = text_layer(cfg["outro_text"], 80, YELLOW, 8) if cfg.get("outro_text") else None
 
     def frame(t):
@@ -356,11 +422,8 @@ def ranking(cfg, base):
                 cur = i
         if cur >= 0:
             lt = t - starts[cur]
-            c.alpha_composite(medias[cur].frame(1 + 0.08 * min(1, lt / durs[cur])), (0, top))
-            # 목록 가독성을 위한 왼쪽 그림자
-            fade = Image.new("RGBA", (W, mh), (0, 0, 0, 0))
-            ImageDraw.Draw(fade).rectangle([0, 0, W, int(row_h * n + 120)], fill=(0, 0, 0, 90))
-            c.alpha_composite(fade, (0, top))
+            c.alpha_composite(medias[cur].frame(1 + 0.08 * min(1, lt / durs[cur]), t), (0, top))
+            c.alpha_composite(list_shade, (0, top))
         else:
             ImageDraw.Draw(c).rectangle([0, top, W, H], fill=(20, 20, 20))
 
