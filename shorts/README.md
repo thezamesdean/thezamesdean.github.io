@@ -1,5 +1,10 @@
 # 쇼츠 생성기 (비포/애프터 · 랭킹)
 
+> **상태: 보류 (2026-10-10)**
+> 다시 시작할 때: `PROMPTS.md`로 AI 실사 이미지 7장 만들기 → `examples/`에 파일명대로 저장 →
+> `python3 make_short.py examples/diet_camcorder.json` / `examples/ranking_camcorder.json` 실행.
+> 레퍼런스(2천만+ 조회수)와 반영한 패턴은 `REFERENCES.md` 참고.
+
 JSON 하나 쓰고 명령어 한 줄이면 1080x1920 쇼츠 mp4가 나옵니다. 효과음(휙·팡·쿵)은 자동으로 들어갑니다.
 
 ```bash
